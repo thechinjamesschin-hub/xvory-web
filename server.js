@@ -5,12 +5,52 @@ const fs = require('fs');
 
 const app = express();
 const PORT = process.env.PORT || 3000;
+const DATA_FILE = path.join(__dirname, 'data.json');
 
 app.use(cors());
 app.use(express.json({ limit: '50mb' }));
 app.use(express.urlencoded({ extended: true, limit: '50mb' }));
 app.use(express.static(path.join(__dirname, 'public')));
 
+// --- Persistent Storage ---
+let configs = [];
+let activeConfigId = null;
+
+function loadData() {
+    try {
+        if (fs.existsSync(DATA_FILE)) {
+            const raw = fs.readFileSync(DATA_FILE, 'utf8');
+            const data = JSON.parse(raw);
+            configs = data.configs || [];
+            activeConfigId = data.activeConfigId || null;
+            console.log(`Loaded ${configs.length} configs from disk. Active: ${activeConfigId || 'none'}`);
+        }
+    } catch (err) {
+        console.error('Error loading data:', err.message);
+        configs = [];
+        activeConfigId = null;
+    }
+}
+
+function saveData() {
+    try {
+        const data = JSON.stringify({ configs, activeConfigId }, null, 2);
+        fs.writeFileSync(DATA_FILE, data, 'utf8');
+    } catch (err) {
+        console.error('Error saving data:', err.message);
+    }
+}
+
+// Load saved data on startup
+loadData();
+
+// --- Helper: get active config object ---
+function getActiveConfig() {
+    if (!activeConfigId) return null;
+    return configs.find(c => c.id === activeConfigId) || null;
+}
+
+// --- Routes ---
 app.get('/', (req, res) => {
     const indexPath = path.join(__dirname, 'public', 'index.html');
     if (fs.existsSync(indexPath)) {
@@ -19,11 +59,6 @@ app.get('/', (req, res) => {
         res.status(200).send("<h3>Xvory Server is running!</h3><p>However, the <b>public</b> folder is missing. Please make sure you uploaded the 'public' directory to GitHub.</p>");
     }
 });
-
-// Simple in-memory storage for configs
-// Format: { id: "config1", name: "My Config", script: "print('hello')" }
-let configs = [];
-let activeConfig = null;
 
 const VALID_KEY = "xvory-admin";
 
@@ -37,7 +72,7 @@ app.post('/api/verify', (req, res) => {
 });
 
 app.get('/api/configs', (req, res) => {
-    res.json({ success: true, configs });
+    res.json({ success: true, configs, activeConfigId });
 });
 
 app.post('/api/configs', (req, res) => {
@@ -54,6 +89,7 @@ app.post('/api/configs', (req, res) => {
     };
 
     configs.push(newConfig);
+    saveData();
     res.json({ success: true, config: newConfig });
 });
 
@@ -71,11 +107,7 @@ app.put('/api/configs/:id', (req, res) => {
     if (script) configs[index].script = script;
     configs[index].updatedAt = new Date().toISOString();
 
-    // Update activeConfig reference if it was the active one
-    if (activeConfig && activeConfig.id === id) {
-        activeConfig = configs[index];
-    }
-
+    saveData();
     res.json({ success: true, config: configs[index] });
 });
 
@@ -91,10 +123,11 @@ app.delete('/api/configs/:id', (req, res) => {
     const deleted = configs.splice(index, 1)[0];
 
     // Clear active config if it was deleted
-    if (activeConfig && activeConfig.id === id) {
-        activeConfig = null;
+    if (activeConfigId === id) {
+        activeConfigId = null;
     }
 
+    saveData();
     res.json({ success: true, message: "Config deleted", config: deleted });
 });
 
@@ -103,18 +136,20 @@ app.post('/api/active-config', (req, res) => {
     const config = configs.find(c => c.id === id);
 
     if (config) {
-        activeConfig = config;
-        res.json({ success: true, message: "Active config set", activeConfig });
+        activeConfigId = id;
+        saveData();
+        res.json({ success: true, message: "Active config set", activeConfig: config });
     } else {
         res.status(404).json({ success: false, message: "Config not found" });
     }
 });
 
 app.get('/api/active-config', (req, res) => {
-    if (activeConfig) {
-        res.json({ success: true, script: activeConfig.script, name: activeConfig.name });
+    const active = getActiveConfig();
+    if (active) {
+        res.send(active.script);
     } else {
-        res.json({ success: false, message: "No active configuration set" });
+        res.status(404).send("-- No active configuration set by Xvory Dashboard");
     }
 });
 

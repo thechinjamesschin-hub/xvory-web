@@ -167,41 +167,62 @@ local BASE_URL = "https://test-production-8fbf.up.railway.app"
 
 
 
+local function extractConfigTable(source)
+    local marker = source:find("shared%.xvory%s*=%s*{")
+    if not marker then return nil end
+    local braceStart = source:find("{", marker)
+    if not braceStart then return nil end
+    local depth = 0
+    for i = braceStart, #source do
+        local c = source:sub(i, i)
+        if c == "{" then depth = depth + 1 end
+        if c == "}" then
+            depth = depth - 1
+            if depth == 0 then
+                return source:sub(marker, i)
+            end
+        end
+    end
+    return nil
+end
+
 local function runXvory()
     local method = shared.xvory.Settings.Method or "Table"
     
     local success, err = pcall(function()
         if method == "Web" then
-            local HttpService = game:GetService("HttpService")
             local url = BASE_URL .. "/api/active-config?t=" .. tostring(tick())
             local raw = game:HttpGet(url)
             
-            if not raw or raw == "" then
-                error("Empty response from server")
-            end
-            
-            local decoded = HttpService:JSONDecode(raw)
-            
-            if not decoded.success then
+            if not raw or raw == "" or raw == "-- No active configuration set by Xvory Dashboard" then
                 error("No Config Were Selected on the website dashboard")
             end
             
-            local configScript = decoded.script
-            if not configScript or configScript == "" then
-                error("Config script is empty")
+            local configOnly = extractConfigTable(raw)
+            if not configOnly then
+                error("Could not find shared.xvory table in web config")
             end
             
-            local loadFunc, loadErr = loadstring(configScript)
-            if loadFunc then
-                loadFunc()
-                print("Xvory: Config loaded from Web - " .. tostring(decoded.name or "Unknown"))
-            else
+            local loadFunc, loadErr = loadstring(configOnly)
+            if not loadFunc then
                 error("Config parse error: " .. tostring(loadErr))
             end
+            
+            local env = getfenv(0)
+            if setfenv then
+                pcall(setfenv, loadFunc, env)
+            end
+            
+            loadFunc()
             
             if not shared.xvory then
                 error("Web config did not set shared.xvory")
             end
+            
+            shared.xvory.Settings = shared.xvory.Settings or {}
+            shared.xvory.Settings.Method = "Web"
+            
+            print("Xvory: Config loaded from Web")
             
         elseif method == "Table" then
             print("Xvory: Using local Table config")
@@ -214,13 +235,6 @@ local function runXvory()
         print("Xvory: Config ready — running sources")
     else
         warn("Xvory config failed: " .. tostring(err))
-        pcall(function()
-            game:GetService("StarterGui"):SetCore("SendNotification", {
-                Title = "Xvory Error",
-                Text = "Config Load Failed: " .. tostring(err),
-                Duration = 10
-            })
-        end)
     end
     
     return success

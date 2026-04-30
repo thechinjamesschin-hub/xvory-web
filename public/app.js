@@ -96,6 +96,14 @@ document.addEventListener('DOMContentLoaded', () => {
             .then(data => {
                 if (data.success) {
                     savedConfigs = data.configs;
+                    if (data.activeConfigId) {
+                        activeConfigId = data.activeConfigId;
+                        const activeCfg = savedConfigs.find(c => c.id === activeConfigId);
+                        if (activeConfigName && activeCfg) {
+                            activeConfigName.textContent = activeCfg.name;
+                            activeConfigName.classList.add('has-config');
+                        }
+                    }
                     renderConfigs();
                     updateStats();
                 }
