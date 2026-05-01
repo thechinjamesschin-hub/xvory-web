@@ -840,3 +840,25 @@ body {
 .toast.success {
     border-left: 4px solid var(--green);
 }
+
+/* Eye Toggle Buttons */
+.eye-toggle {
+    position: absolute;
+    right: 12px;
+    top: 50%;
+    transform: translateY(-50%);
+    background: none;
+    border: none;
+    color: var(--text-muted);
+    cursor: pointer;
+    padding: 4px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: color 0.2s;
+    z-index: 2;
+}
+
+.eye-toggle:hover {
+    color: white;
+}
