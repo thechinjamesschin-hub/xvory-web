@@ -4,7 +4,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Xvory — Cloud Dashboard</title>
+    <title>Xvory</title>
     <meta name="description" content="Xvory Cloud Dashboard — Manage your Lua configurations remotely.">
     <link rel="stylesheet" href="style.css">
     <link
@@ -12,6 +12,48 @@
         rel="stylesheet">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.13/codemirror.min.css">
     <link rel="stylesheet" href="xvory-theme.css">
+
+    <!-- Cloudflare Turnstile -->
+    <script src="https://challenges.cloudflare.com/turnstile/v0/api.js?onload=onloadTurnstileCallback" async
+        defer></script>
+
+    <!-- Anti-DevTools and Source Stealing Security -->
+    <script>
+        // Disable context menu (right-click)
+        document.addEventListener('contextmenu', e => e.preventDefault());
+
+        // Disable keyboard shortcuts used for opening DevTools and viewing source
+        document.addEventListener('keydown', e => {
+            if (
+                e.key === 'F12' ||
+                (e.ctrlKey && e.shiftKey && ['I', 'J', 'C'].includes(e.key.toUpperCase())) ||
+                (e.ctrlKey && e.key.toUpperCase() === 'U') ||
+                (e.metaKey && e.altKey && ['I', 'J', 'C'].includes(e.key.toUpperCase())) ||
+                (e.metaKey && e.key.toUpperCase() === 'U')
+            ) {
+                e.preventDefault();
+                window.location.href = 'about:blank';
+            }
+        });
+
+        // Detect DevTools via debugger pausing and resize thresholds
+        const checkDevTools = () => {
+            // Check size difference (devtools usually takes > 160px)
+            if (window.outerWidth - window.innerWidth > 200 || window.outerHeight - window.innerHeight > 200) {
+                window.location.href = 'about:blank';
+            }
+
+            // Check via debugger trap
+            const start = Date.now();
+            debugger;
+            const end = Date.now();
+            if (end - start > 100) {
+                window.location.href = 'about:blank';
+            }
+        };
+
+        setInterval(checkDevTools, 1000);
+    </script>
 </head>
 
 <body>
@@ -23,15 +65,15 @@
         <div class="login-wrapper">
             <div class="login-glow"></div>
             <div class="login-box">
+
                 <div class="login-brand">
                     <div class="brand-icon">
-                        <svg width="44" height="44" viewBox="0 0 40 40" fill="none">
+                        <svg width="60" height="60" viewBox="0 0 40 40" fill="none">
                             <path d="M20 2L37 11V29L20 38L3 29V11L20 2Z" stroke="url(#grad1)" stroke-width="2"
                                 fill="none" />
-                            <path d="M20 8L31 14V26L20 32L9 26V14L20 8Z" fill="url(#grad1)" opacity="0.12" />
                             <path d="M20 14L25 17V23L20 26L15 23V17L20 14Z" fill="url(#grad1)" />
                             <defs>
-                                <linearGradient id="grad1" x1="0" y1="0" x2="40" y2="40">
+                                <linearGradient id="grad1" x1="0" y1="0" x2="40" x2="40">
                                     <stop offset="0%" stop-color="#ff3a3a" />
                                     <stop offset="100%" stop-color="#ff6b6b" />
                                 </linearGradient>
@@ -39,38 +81,117 @@
                         </svg>
                     </div>
                     <h1>XVORY</h1>
-                    <p class="brand-tagline">Cloud Execution Platform</p>
+                    <p class="brand-tagline">CLOUD-BASED LUA MANAGEMENT</p>
                 </div>
-                <div class="login-form">
-                    <label for="key-input">Authentication Key</label>
+
+                <div class="login-tabs"
+                    style="display: flex; border-bottom: 1px solid rgba(255,255,255,0.1); margin-bottom: 20px;">
+                    <button class="auth-tab active" data-target="form-login"
+                        style="flex: 1; background: none; border: none; color: white; padding: 10px; cursor: pointer; border-bottom: 2px solid #ff3a3a; font-weight: 600;">Login</button>
+                    <button class="auth-tab" data-target="form-register"
+                        style="flex: 1; background: none; border: none; color: #888; padding: 10px; cursor: pointer; border-bottom: 2px solid transparent; font-weight: 600;">Register</button>
+                </div>
+
+                <div class="login-form" id="form-login">
+                    <label for="login-username">Username</label>
                     <div class="input-wrapper">
                         <svg class="input-icon" width="18" height="18" viewBox="0 0 24 24" fill="none"
                             stroke="currentColor" stroke-width="2">
-                            <rect x="3" y="11" width="18" height="11" rx="2" ry="2" />
-                            <path d="M7 11V7a5 5 0 0110 0v4" />
+                            <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"></path>
+                            <circle cx="12" cy="7" r="4"></circle>
                         </svg>
-                        <input type="password" id="key-input" placeholder="Enter your key...">
+                        <input type="text" id="login-username" placeholder="Enter username...">
                     </div>
+
+                    <label for="login-password" style="margin-top: 15px;">Password</label>
+                    <div class="input-wrapper">
+                        <svg class="input-icon" width="18" height="18" viewBox="0 0 24 24" fill="none"
+                            stroke="currentColor" stroke-width="2">
+                            <rect x="3" y="11" width="18" height="11" rx="2" ry="2"></rect>
+                            <path d="M7 11V7a5 5 0 0 1 10 0v4"></path>
+                        </svg>
+                        <input type="password" id="login-password" placeholder="Enter password...">
+                    </div>
+
+                    <div style="display: flex; align-items: center; margin-top: 15px; margin-bottom: 20px;">
+                        <input type="checkbox" id="stay-signed-in"
+                            style="width: auto; margin-right: 8px; cursor: pointer;">
+                        <label for="stay-signed-in"
+                            style="margin: 0; font-size: 13px; color: #aaa; cursor: pointer;">Stay Signed In</label>
+                    </div>
+
+                    <!-- Cloudflare Turnstile Widget -->
+                    <div id="cf-login" style="margin-bottom: 15px;"></div>
+
                     <button id="login-btn">
-                        <span>Authenticate</span>
+                        <span>Login</span>
                         <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor"
                             stroke-width="2">
-                            <path d="M5 12h14M12 5l7 7-7 7" />
+                            <line x1="5" y1="12" x2="19" y2="12" />
+                            <polyline points="12 5 19 12 12 19" />
                         </svg>
                     </button>
                     <div id="login-error" class="error-msg"></div>
                 </div>
-                <div class="login-footer">
-                    <a href="https://discord.gg/TbXGkktFM" target="_blank" class="discord-link" id="discord-login-link">
-                        <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor">
-                            <path
-                                d="M20.317 4.3698a19.7913 19.7913 0 00-4.8851-1.5152.0741.0741 0 00-.0785.0371c-.211.3753-.4447.8648-.6083 1.2495-1.8447-.2762-3.68-.2762-5.4868 0-.1636-.3933-.4058-.8742-.6177-1.2495a.077.077 0 00-.0785-.037 19.7363 19.7363 0 00-4.8852 1.515.0699.0699 0 00-.0321.0277C.5334 9.0458-.319 13.5799.0992 18.0578a.0824.0824 0 00.0312.0561c2.0528 1.5076 4.0413 2.4228 5.9929 3.0294a.0777.0777 0 00.0842-.0276c.4616-.6304.8731-1.2952 1.226-1.9942a.076.076 0 00-.0416-.1057c-.6528-.2476-1.2743-.5495-1.8722-.8923a.077.077 0 01-.0076-.1277c.1258-.0943.2517-.1923.3718-.2914a.0743.0743 0 01.0776-.0105c3.9278 1.7933 8.18 1.7933 12.0614 0a.0739.0739 0 01.0785.0095c.1202.099.246.1981.3728.2924a.077.077 0 01-.0066.1276 12.2986 12.2986 0 01-1.873.8914.0766.0766 0 00-.0407.1067c.3604.698.7719 1.3628 1.225 1.9932a.076.076 0 00.0842.0286c1.961-.6067 3.9495-1.5219 6.0023-3.0294a.077.077 0 00.0313-.0552c.5004-5.177-.8382-9.6739-3.5485-13.6604a.061.061 0 00-.0312-.0286z" />
+
+                <div class="login-form" id="form-register" style="display: none;">
+                    <label for="reg-username">Username</label>
+                    <div class="input-wrapper">
+                        <svg class="input-icon" width="18" height="18" viewBox="0 0 24 24" fill="none"
+                            stroke="currentColor" stroke-width="2">
+                            <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"></path>
+                            <circle cx="12" cy="7" r="4"></circle>
                         </svg>
-                        <span>Join Discord</span>
-                    </a>
+                        <input type="text" id="reg-username" placeholder="Choose username...">
+                    </div>
+
+                    <label for="reg-password" style="margin-top: 15px;">Password</label>
+                    <div class="input-wrapper">
+                        <svg class="input-icon" width="18" height="18" viewBox="0 0 24 24" fill="none"
+                            stroke="currentColor" stroke-width="2">
+                            <rect x="3" y="11" width="18" height="11" rx="2" ry="2"></rect>
+                            <path d="M7 11V7a5 5 0 0 1 10 0v4"></path>
+                        </svg>
+                        <input type="password" id="reg-password" placeholder="Choose password...">
+                    </div>
+
+                    <label for="reg-license" style="margin-top: 15px;">License Key</label>
+                    <div class="input-wrapper">
+                        <svg class="input-icon" width="18" height="18" viewBox="0 0 24 24" fill="none"
+                            stroke="currentColor" stroke-width="2">
+                            <path
+                                d="M21 2l-2 2m-7.61 7.61a5.5 5.5 0 11-7.778 7.778 5.5 5.5 0 017.777-7.777zm0 0L15.5 7.5m0 0l3 3L22 7l-3-3m-3.5 3.5L19 4" />
+                        </svg>
+                        <input type="password" id="reg-license" placeholder="Enter license key...">
+                    </div>
+
+                    <!-- Cloudflare Turnstile Widget -->
+                    <div id="cf-register" style="margin-top: 15px; margin-bottom: 5px;"></div>
+
+                    <button id="register-btn">
+                        <span>Register</span>
+                        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                            stroke-width="2">
+                            <line x1="5" y1="12" x2="19" y2="12" />
+                            <polyline points="12 5 19 12 12 19" />
+                        </svg>
+                    </button>
+                    <div id="register-error" class="error-msg"></div>
                 </div>
+
+
+            </div>
+            <div class="login-footer">
+                <a href="https://discord.gg/KTYtx5yY" target="_blank" class="discord-link" id="discord-login-link">
+                    <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor">
+                        <path
+                            d="M20.317 4.3698a19.7913 19.7913 0 00-4.8851-1.5152.0741.0741 0 00-.0785.0371c-.211.3753-.4447.8648-.6083 1.2495-1.8447-.2762-3.68-.2762-5.4868 0-.1636-.3933-.4058-.8742-.6177-1.2495a.077.077 0 00-.0785-.037 19.7363 19.7363 0 00-4.8852 1.515.0699.0699 0 00-.0321.0277C.5334 9.0458-.319 13.5799.0992 18.0578a.0824.0824 0 00.0312.0561c2.0528 1.5076 4.0413 2.4228 5.9929 3.0294a.0777.0777 0 00.0842-.0276c.4616-.6304.8731-1.2952 1.226-1.9942a.076.076 0 00-.0416-.1057c-.6528-.2476-1.2743-.5495-1.8722-.8923a.077.077 0 01-.0076-.1277c.1258-.0943.2517-.1923.3718-.2914a.0743.0743 0 01.0776-.0105c3.9278 1.7933 8.18 1.7933 12.0614 0a.0739.0739 0 01.0785.0095c.1202.099.246.1981.3728.2924a.077.077 0 01-.0066.1276 12.2986 12.2986 0 01-1.873.8914.0766.0766 0 00-.0407.1067c.3604.698.7719 1.3628 1.225 1.9932a.076.076 0 00.0842.0286c1.961-.6067 3.9495-1.5219 6.0023-3.0294a.077.077 0 00.0313-.0552c.5004-5.177-.8382-9.6739-3.5485-13.6604a.061.061 0 00-.0312-.0286z" />
+                    </svg>
+                    <span>Join Our Discord</span>
+                </a>
             </div>
         </div>
+    </div>
     </div>
 
     <!-- DASHBOARD SCREEN -->
@@ -120,7 +241,7 @@
             </div>
 
             <div class="sidebar-footer">
-                <a href="https://discord.gg/X7WxKZyw" target="_blank" class="sidebar-discord-btn"
+                <a href="https://discord.gg/KTYtx5yY" target="_blank" class="sidebar-discord-btn"
                     id="discord-sidebar-link">
                     <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor">
                         <path
@@ -158,25 +279,25 @@
             <div id="tab-dashboard" class="tab-content active">
                 <div class="dashboard-grid">
                     <div class="dash-card" id="card-key">
-                        <div class="dash-card-header">
-                            <div class="dash-card-icon">
-                                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor"
-                                    stroke-width="2">
-                                    <path
-                                        d="M21 2l-2 2m-7.61 7.61a5.5 5.5 0 11-7.778 7.778 5.5 5.5 0 017.777-7.777zm0 0L15.5 7.5m0 0l3 3L22 7l-3-3m-3.5 3.5L19 4" />
-                                </svg>
+                        <div class="dash-card-header" style="justify-content: space-between;">
+                            <div style="display: flex; align-items: center; gap: 10px;">
+                                <div class="dash-card-icon">
+                                    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                                        stroke-width="2">
+                                        <path
+                                            d="M21 2l-2 2m-7.61 7.61a5.5 5.5 0 11-7.778 7.778 5.5 5.5 0 017.777-7.777zm0 0L15.5 7.5m0 0l3 3L22 7l-3-3m-3.5 3.5L19 4" />
+                                    </svg>
+                                </div>
+                                <h3>Account Overview</h3>
                             </div>
-                            <h3>Authentication Key</h3>
+                            <span id="tier-badge"
+                                style="font-size: 11px; padding: 3px 8px; border-radius: 12px; background: rgba(93, 156, 236, 0.2); color: #5d9cec; font-weight: bold;">User</span>
                         </div>
-                        <div class="key-display">
-                            <code id="masked-key" data-key="">••••••••••••</code>
-                            <button id="toggle-key-btn" class="key-toggle-btn" title="Toggle key visibility">
-                                <svg id="eye-icon" width="18" height="18" viewBox="0 0 24 24" fill="none"
-                                    stroke="currentColor" stroke-width="2">
-                                    <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z" />
-                                    <circle cx="12" cy="12" r="3" />
-                                </svg>
-                            </button>
+                        <div class="key-display" style="padding: 15px;">
+                            <div style="font-size: 12px; color: #888;">Logged in as</div>
+                            <div id="account-username"
+                                style="font-size: 20px; font-weight: 600; color: white; margin-top: 5px;"></div>
+                            <code id="masked-key" data-key=""></code>
                         </div>
                     </div>
 
@@ -228,7 +349,7 @@
                                     <polyline points="16 18 22 12 16 6" />
                                     <polyline points="8 6 2 12 8 18" />
                                 </svg>
-                                <span>Lua Editor</span>
+                                <span>Cloud</span>
                                 <span class="editor-status" id="editor-status"></span>
                             </div>
                             <div class="panel-actions">
@@ -252,7 +373,170 @@
                             </div>
                         </div>
                         <div class="editor-container" id="editor-wrapper">
-                            <textarea id="lua-editor"></textarea>
+                            <textarea id="lua-editor">shared.xvory = {
+    ["Settings"] = {
+        ["Method"] = "Web"; -- "Table" or "Web"
+        ["General"] = {
+            ["Keybind"] = {
+                ["Target"] = "Q",
+                ["Camlock"] = "Q",
+                ["2Tap"] = "Q",
+                ["Triggerbot"] = "Q",
+                ["Inventory Sorter"] = "N",
+                ["ESP"] = "B"
+            }
+        }
+    },
+    ["Silent"] = {
+        ["Enabled"] = true,
+        ["Mode"] = "Target",
+        ["Max Dist"] = 250,
+        ["Hit Part"] = "Closest Point",
+        ["Closest Point"] = {
+            ["Mode"] = "Advanced",
+            ["Scale"] = 0.2
+        },
+        ["Prediction"] = {
+            ["Enabled"] = true,
+            ["Mode"] = "Regular",
+            ["x"] = 0,
+            ["y"] = 0,
+            ["z"] = 0
+        },
+        ["Client Mode"] = {
+            ["Enabled"] = false,
+            ["weapons"] = { "[Revolver]", "[Silencer]", "[Glock]" }
+        },
+        ["Fov"] = {
+            ["Enabled"] = true,
+            ["Visible"] = false,
+            ["Circle"] = 45,
+            ["Hit Scan"] = 45,
+            ["Weapon Configuration"] = {
+                ["Enabled"] = true,
+                ["Shotguns"] = { circle = 60 },
+                ["Pistol"] = { circle = 50 },
+                ["Others"] = { circle = 45 }
+            }
+        },
+        ["Conditions"] = {
+            ["Visible"] = false,
+            ["Grabbed"] = true,
+            ["knocked"] = true,
+            ["Self Knocked"] = false,
+            ["Chat"] = true
+        }
+    },
+    ["Camlock"] = {
+        ["Enabled"] = true,
+        ["HitPart"] = "Head",
+        ["Closest Point"] = {
+            ["Mode"] = "Advanced",
+            ["Scale"] = 0.15
+        },
+        ["Sticky"] = 0.55,
+        ["EasingMode"] = "Circular",
+        ["EasingDirection"] = "Out",
+        ["Pred"] = {
+            ["Enabled"] = true,
+            ["X"] = 0.06,
+            ["Y"] = 0.04,
+            ["Z"] = 0.06
+        },
+        ["Fov"] = {
+            ["Enabled"] = true,
+            ["Visible"] = false,
+            ["Size"] = 90
+        },
+        ["Conditions"] = {
+            ["Visible"] = true,
+            ["Grabbed"] = true,
+            ["knocked"] = true,
+            ["Self Knocked"] = false,
+            ["Chat"] = true
+        }
+    },
+    ["Triggerbot"] = {
+        ["Enabled"] = true,
+        ["Mode"] = "Target",
+        ["Max Dist"] = 200,
+        ["Radius"] = 12,
+        ["Cooldown"] = 0.12,
+        ["Works"] = {
+            ["Mode"] = "Keybind",
+            ["Type"] = "Hold"
+        },
+        ["Prediction"] = {
+            ["Enabled"] = false,
+            ["Value"] = 0
+        },
+        ["Fov"] = {
+            ["Visible"] = false,
+            ["X"] = 3.5,
+            ["Y"] = 6,
+            ["Z"] = 3.5,
+            ["Scale"] = 1.2
+        },
+        ["Conditions"] = {
+            ["Visible"] = false,
+            ["Grabbed"] = true,
+            ["knocked"] = true,
+            ["Self Knocked"] = false,
+            ["Chat"] = true
+        }
+    },
+    ["Weapon"] = {
+        ["2Tap"] = {
+            ["Enabled"] = false,
+            ["Weapons"] = { "[Revolver]", "[Silencer]" }
+        },
+        ["Bullet Spread"] = {
+            ["Enabled"] = false,
+            ["Value"] = 0.0,
+            ["Randomizer"] = {
+                ["Enabled"] = true,
+                ["Value"] = 0.0
+            }
+        },
+        ["Delays Changer"] = {
+            ["Enabled"] = false,
+            ["[Revolver]"] = 0.00,
+            ["[Double-Barrel SG]"] = 0.40,
+            ["[TacticalShotgun]"] = 0.30,
+            ["Others"] = 2.3
+        }
+    },
+    ["Player Modifications"] = {
+        ["Anti Fall"] = true,
+        ["Avatar Changer"] = {
+            ["Enabled"] = false,
+            ["Username"] = "zlovcys",
+            ["Misc"] = {
+                ["Headless"] = false,
+                ["Korblox"] = true
+            }
+        }
+    },
+    ["Local Game"] = {
+        ["Inventory Sorter"] = {
+            ["Enabled"] = false,
+            ["Order"] = {
+                "[Double-Barrel SG]",
+                "[Revolver]",
+                "[TacticalShotgun]",
+                "[Knife]"
+            }
+        }
+    },
+    ["ESP"] = {
+        ["Enabled"] = true,
+        ["Color"] = Color3.fromRGB(255, 255, 255),
+        ["TargetColor"] = Color3.fromRGB(0, 255, 0),
+        ["UseDisplayName"] = true,
+        ["Position"] = "Bottom",
+        ["Size"] = 14
+    }
+}</textarea>
                         </div>
                     </div>
 
@@ -264,17 +548,20 @@
                                     stroke-width="2">
                                     <path d="M22 19a2 2 0 01-2 2H4a2 2 0 01-2-2V5a2 2 0 012-2h5l2 3h9a2 2 0 012 2z" />
                                 </svg>
-                                <span>Stored Configs</span>
+                                <span>Lists</span>
                             </div>
-                            <span class="config-badge" id="config-badge">0</span>
+                            <div style="display:flex; gap:10px; align-items:center;">
+                                <span class="config-badge" id="config-badge">0</span>
+                                <button id="global-set-btn" class="btn-modal btn-confirm"
+                                    style="font-size: 12px; padding: 4px 10px; background: #2ecc71; color: white;">Set
+                                    as Active</button>
+                            </div>
                         </div>
                         <div class="config-list" id="config-list">
-                            <!-- Configs will be loaded here -->
                         </div>
                     </div>
                 </div>
             </div>
-        </main>
     </div>
 
     <!-- Save Modal -->
@@ -291,7 +578,7 @@
             </div>
             <div class="modal-body">
                 <label for="config-name-input">Configuration Name</label>
-                <input type="text" id="config-name-input" placeholder="e.g., Farm Script v2">
+                <input type="text" id="config-name-input" placeholder="">
             </div>
             <div class="modal-footer">
                 <button id="modal-cancel-btn" class="btn-modal btn-cancel">Cancel</button>
@@ -301,6 +588,80 @@
                     </svg>
                     <span id="modal-save-label">Save</span>
                 </button>
+            </div>
+        </div>
+    </div>
+
+    <div id="set-active-modal" class="modal-overlay">
+        <div class="modal-box">
+            <div class="modal-header">
+                <h3>Set Active Configuration</h3>
+                <button id="active-modal-close" class="modal-close">
+                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <line x1="18" y1="6" x2="6" y2="18" />
+                        <line x1="6" y1="6" x2="18" y2="18" />
+                    </svg>
+                </button>
+            </div>
+            <div class="modal-body" style="margin-bottom: 15px;">
+                <div id="active-config-list-modal" style="max-height: 250px; overflow-y: auto; padding-right: 5px;">
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button id="active-modal-cancel" class="btn-modal btn-cancel">Cancel</button>
+                <button id="active-modal-confirm" class="btn-modal btn-confirm"
+                    style="background: #2ecc71; color: white;">
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <polyline points="20 6 9 17 4 12" />
+                    </svg>
+                    <span>Set</span>
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Logout Modal -->
+    <div id="logout-modal" class="modal-overlay">
+        <div class="modal-box">
+            <div class="modal-header">
+                <h3>Warning</h3>
+                <button id="logout-modal-close" class="modal-close">
+                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <line x1="18" y1="6" x2="6" y2="18" />
+                        <line x1="6" y1="6" x2="18" y2="18" />
+                    </svg>
+                </button>
+            </div>
+            <div class="modal-body" style="text-align: center; padding: 30px 20px;">
+                <p style="font-size: 16px; font-weight: 600;">Are u sure u want to Log out ⚠</p>
+            </div>
+            <div class="modal-footer">
+                <button id="logout-modal-cancel" class="btn-modal btn-cancel">Cancel</button>
+                <button id="logout-modal-confirm" class="btn-modal btn-confirm"
+                    style="background: #ef4444; color: white;">Logout</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Delete Modal -->
+    <div id="delete-modal" class="modal-overlay">
+        <div class="modal-box">
+            <div class="modal-header">
+                <h3>Delete Configuration</h3>
+                <button id="delete-modal-close" class="modal-close">
+                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <line x1="18" y1="6" x2="6" y2="18" />
+                        <line x1="6" y1="6" x2="18" y2="18" />
+                    </svg>
+                </button>
+            </div>
+            <div class="modal-body" style="text-align: center; padding: 20px 0;">
+                <p>Are you sure you want to delete <strong id="delete-config-name"></strong>?</p>
+            </div>
+            <div class="modal-footer">
+                <button id="delete-modal-cancel" class="btn-modal btn-cancel">Cancel</button>
+                <button id="delete-modal-confirm" class="btn-modal btn-confirm"
+                    style="background: #ef4444; color: white;">Delete</button>
             </div>
         </div>
     </div>

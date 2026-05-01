@@ -1,16 +1,34 @@
+window.turnstileLoginId = null;
+window.turnstileRegisterId = null;
+
+window.onloadTurnstileCallback = function () {
+    const sitekey = '0x4AAAAAADHAYXGvq5g1uUe4';
+    window.turnstileLoginId = turnstile.render('#cf-login', { sitekey: sitekey, theme: 'dark' });
+    window.turnstileRegisterId = turnstile.render('#cf-register', { sitekey: sitekey, theme: 'dark' });
+};
+
 document.addEventListener('DOMContentLoaded', () => {
     // --- State ---
     let savedConfigs = [];
     let activeConfigId = null;
     let editor = null;
-    let editingConfigId = null; // Track if we're editing an existing config
+    let editingConfigId = null;
 
     // --- DOM Elements ---
     const loginScreen = document.getElementById('login-screen');
     const dashboardScreen = document.getElementById('dashboard-screen');
-    const keyInput = document.getElementById('key-input');
+
+    const loginUsername = document.getElementById('login-username');
+    const loginPassword = document.getElementById('login-password');
+    const staySignedIn = document.getElementById('stay-signed-in');
     const loginBtn = document.getElementById('login-btn');
     const loginError = document.getElementById('login-error');
+
+    const regUsername = document.getElementById('reg-username');
+    const regPassword = document.getElementById('reg-password');
+    const regLicense = document.getElementById('reg-license');
+    const registerBtn = document.getElementById('register-btn');
+    const registerError = document.getElementById('register-error');
 
     const tabs = document.querySelectorAll('.nav-links li');
     const tabContents = document.querySelectorAll('.tab-content');
@@ -18,6 +36,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
     const maskedKey = document.getElementById('masked-key');
     const toggleKeyBtn = document.getElementById('toggle-key-btn');
+    const copyKeyBtn = document.getElementById('copy-key-btn');
 
     const saveBtn = document.getElementById('save-btn');
     const configList = document.getElementById('config-list');
@@ -30,12 +49,32 @@ document.addEventListener('DOMContentLoaded', () => {
     const modalOkBtn = document.getElementById('modal-ok-btn');
     const modalCloseBtn = document.getElementById('modal-close-btn');
     const configNameInput = document.getElementById('config-name-input');
-    const modalTitle = document.getElementById('modal-title');
-    const modalSaveLabel = document.getElementById('modal-save-label');
 
     const logoutBtn = document.getElementById('logout-btn');
     const editorStatus = document.getElementById('editor-status');
     const clearEditorBtn = document.getElementById('clear-editor-btn');
+
+    // Modals
+    const setActiveBtn = document.getElementById('set-active-btn') || document.getElementById('global-set-btn');
+    const setActiveModal = document.getElementById('set-active-modal');
+    const activeModalClose = document.getElementById('active-modal-close');
+    const activeModalCancel = document.getElementById('active-modal-cancel');
+    const activeModalConfirm = document.getElementById('active-modal-confirm');
+    const activeConfigListModal = document.getElementById('active-config-list-modal');
+
+    const logoutModal = document.getElementById('logout-modal');
+    const logoutModalCancel = document.getElementById('logout-modal-cancel');
+    const logoutModalConfirm = document.getElementById('logout-modal-confirm');
+    const logoutModalClose = document.getElementById('logout-modal-close');
+
+    const deleteModal = document.getElementById('delete-modal');
+    const deleteModalCancel = document.getElementById('delete-modal-cancel');
+    const deleteModalConfirm = document.getElementById('delete-modal-confirm');
+    const deleteModalClose = document.getElementById('delete-modal-close');
+    const deleteConfigName = document.getElementById('delete-config-name');
+    let configToDelete = null;
+
+    let selectedConfigToActive = null;
 
     // --- Toast Notification ---
     function showToast(message, type = 'success') {
@@ -45,7 +84,7 @@ document.addEventListener('DOMContentLoaded', () => {
         setTimeout(() => { toast.classList.remove('show'); }, 3000);
     }
 
-    // --- Key Masking Helper ---
+    // --- Key Masking ---
     function maskKey(key) {
         if (!key || key.length <= 4) return '••••••••';
         const visibleStart = Math.min(3, Math.floor(key.length / 4));
@@ -54,10 +93,13 @@ document.addEventListener('DOMContentLoaded', () => {
         return key.substring(0, visibleStart) + '•'.repeat(maskedLength) + key.substring(key.length - visibleEnd);
     }
 
-    // --- Initialization ---
+    // --- Editor ---
     function initEditor() {
         if (!editor) {
-            editor = CodeMirror.fromTextArea(document.getElementById('lua-editor'), {
+            const editorEl = document.getElementById('lua-editor');
+            if (!editorEl) return;
+
+            editor = CodeMirror.fromTextArea(editorEl, {
                 mode: 'lua',
                 theme: 'xvory',
                 lineNumbers: true,
@@ -69,46 +111,57 @@ document.addEventListener('DOMContentLoaded', () => {
                 styleActiveLine: true
             });
 
-            // Track editor changes for status
+            const savedSession = localStorage.getItem('xvory-editor-session');
+            if (savedSession) {
+                editor.setValue(savedSession);
+            }
+
             editor.on('change', () => {
                 updateEditorStatus();
+                localStorage.setItem('xvory-editor-session', editor.getValue());
             });
+            updateEditorStatus();
         }
     }
 
     function updateEditorStatus() {
-        if (!editorStatus) return;
+        if (!editorStatus || !editor) return;
         const lines = editor.lineCount();
         const chars = editor.getValue().length;
         const sizeStr = chars > 1024 ? `${(chars / 1024).toFixed(1)} KB` : `${chars} B`;
-        
+
         if (editingConfigId) {
             const cfg = savedConfigs.find(c => c.id === editingConfigId);
-            editorStatus.innerHTML = `<span class="status-editing">✏️ Editing: ${cfg ? cfg.name : 'Unknown'}</span> · ${lines} lines · ${sizeStr}`;
+            editorStatus.innerHTML = `<span style="color: #5d9cec;">Editing: ${cfg ? cfg.name : 'Unknown'}</span> <span style="opacity: 0.5;">·</span> ${lines} lines`;
+            if (saveBtn) saveBtn.querySelector('span').textContent = 'Update';
         } else {
-            editorStatus.textContent = `${lines} lines · ${sizeStr}`;
+            editorStatus.innerHTML = `${lines} lines <span style="opacity: 0.5;">·</span> ${sizeStr}`;
+            if (saveBtn) saveBtn.querySelector('span').textContent = 'Save';
         }
     }
 
+    // --- API ---
     function fetchConfigs() {
         fetch('/api/configs')
             .then(res => res.json())
             .then(data => {
                 if (data.success) {
                     savedConfigs = data.configs;
-                    if (data.activeConfigId) {
-                        activeConfigId = data.activeConfigId;
-                        const activeCfg = savedConfigs.find(c => c.id === activeConfigId);
-                        if (activeConfigName && activeCfg) {
-                            activeConfigName.textContent = activeCfg.name;
-                            activeConfigName.classList.add('has-config');
-                        }
-                    }
+                    activeConfigId = data.activeConfigId;
                     renderConfigs();
                     updateStats();
+
+                    const activeCfg = savedConfigs.find(c => c.id === activeConfigId);
+                    if (activeConfigName && activeCfg) {
+                        activeConfigName.textContent = activeCfg.name;
+                        activeConfigName.classList.add('has-config');
+                    } else if (activeConfigName) {
+                        activeConfigName.textContent = 'None selected';
+                        activeConfigName.classList.remove('has-config');
+                    }
                 }
             })
-            .catch(err => console.error("Error fetching configs", err));
+            .catch(err => console.error('Error fetching configs:', err));
     }
 
     function updateStats() {
@@ -116,265 +169,305 @@ document.addEventListener('DOMContentLoaded', () => {
         if (configBadge) configBadge.textContent = savedConfigs.length;
     }
 
-    // --- Login Logic ---
-    loginBtn.addEventListener('click', doLogin);
-    keyInput.addEventListener('keydown', (e) => {
-        if (e.key === 'Enter') doLogin();
+    // --- Login / Register ---
+    const savedAuth = localStorage.getItem('xvory-auth');
+    if (savedAuth) {
+        try {
+            const auth = JSON.parse(savedAuth);
+            doAutoLogin(auth.username, auth.password);
+        } catch (e) {
+            loginScreen.classList.add('active');
+        }
+    } else {
+        loginScreen.classList.add('active');
+    }
+
+    const authTabs = document.querySelectorAll('.auth-tab');
+    authTabs.forEach(tab => {
+        tab.addEventListener('click', () => {
+            authTabs.forEach(t => {
+                t.classList.remove('active');
+                t.style.borderBottomColor = 'transparent';
+                t.style.color = '#888';
+            });
+            tab.classList.add('active');
+            tab.style.borderBottomColor = '#ff3a3a';
+            tab.style.color = 'white';
+
+            document.getElementById('form-login').style.display = 'none';
+            document.getElementById('form-register').style.display = 'none';
+            document.getElementById(tab.dataset.target).style.display = 'block';
+        });
     });
 
     function doLogin() {
-        const key = keyInput.value.trim();
-        if (!key) {
-            loginError.textContent = "Please enter a key";
+        const username = loginUsername.value.trim();
+        const password = loginPassword.value.trim();
+
+        const turnstileElement = document.querySelector('#form-login [name="cf-turnstile-response"]');
+        const turnstileToken = turnstileElement ? turnstileElement.value : '';
+
+        if (!username || !password) {
+            loginError.textContent = "Please enter username and password";
+            return;
+        }
+
+        if (!turnstileToken) {
+            loginError.textContent = "Please complete the Cloudflare verification";
             return;
         }
 
         loginBtn.disabled = true;
-        loginBtn.querySelector('span').textContent = 'Authenticating...';
+        loginBtn.querySelector('span').textContent = 'Logging in...';
 
-        fetch('/api/verify', {
+        fetch('/api/login', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ key })
+            body: JSON.stringify({ username, password, cfToken: turnstileToken })
         })
             .then(res => res.json())
             .then(data => {
                 if (data.success) {
                     loginScreen.classList.remove('active');
                     dashboardScreen.classList.add('active');
-                    maskedKey.dataset.key = key;
-                    maskedKey.textContent = maskKey(key);
+
+                    const accountUsername = document.getElementById('account-username');
+                    if (accountUsername) accountUsername.textContent = username;
+
+                    if (maskedKey) {
+                        maskedKey.dataset.key = 'HIDDEN';
+                        maskedKey.textContent = '••••••••';
+                    }
+
+                    const tierBadge = document.getElementById('tier-badge');
+                    if (tierBadge) {
+                        if (data.user.role === 'Admin') {
+                            tierBadge.textContent = 'Admin';
+                            tierBadge.style.background = 'rgba(239, 68, 68, 0.2)';
+                            tierBadge.style.color = '#ef4444';
+                        } else {
+                            tierBadge.textContent = 'User';
+                            tierBadge.style.background = 'rgba(93, 156, 236, 0.2)';
+                            tierBadge.style.color = '#5d9cec';
+                        }
+                    }
+
                     initEditor();
                     fetchConfigs();
+
+                    if (staySignedIn.checked) {
+                        localStorage.setItem('xvory-auth', JSON.stringify({ username, password }));
+                    } else {
+                        localStorage.removeItem('xvory-auth');
+                    }
+
                     showToast('Authenticated successfully');
                 } else {
                     loginError.textContent = data.message;
                     loginBtn.disabled = false;
-                    loginBtn.querySelector('span').textContent = 'Authenticate';
+                    loginBtn.querySelector('span').textContent = 'Login';
+                    if (window.turnstile && window.turnstileLoginId !== null) window.turnstile.reset(window.turnstileLoginId);
                 }
             })
             .catch(err => {
                 loginError.textContent = "Server connection failed";
                 loginBtn.disabled = false;
-                loginBtn.querySelector('span').textContent = 'Authenticate';
-                console.error(err);
+                loginBtn.querySelector('span').textContent = 'Login';
+                if (window.turnstile && window.turnstileLoginId !== null) window.turnstile.reset(window.turnstileLoginId);
             });
     }
 
-    // --- Tab Navigation ---
-    const tabTitles = { dashboard: 'Dashboard', config: 'Config Editor' };
-
-    tabs.forEach(tab => {
-        tab.addEventListener('click', () => {
-            tabs.forEach(t => t.classList.remove('active'));
-            tabContents.forEach(c => c.classList.remove('active'));
-
-            tab.classList.add('active');
-            const target = tab.dataset.tab;
-            document.getElementById(`tab-${target}`).classList.add('active');
-            pageTitle.textContent = tabTitles[target] || target;
-
-            if (target === 'config' && editor) {
-                setTimeout(() => editor.refresh(), 10);
-            }
-        });
-    });
-
-    // --- Dashboard Logic ---
-    let keyVisible = false;
-    toggleKeyBtn.addEventListener('click', () => {
-        keyVisible = !keyVisible;
-        const eyeIcon = document.getElementById('eye-icon');
-        if (keyVisible) {
-            maskedKey.textContent = maskedKey.dataset.key;
-            maskedKey.classList.add('key-revealed');
-            // Switch to "eye off" icon
-            eyeIcon.innerHTML = '<path d="M17.94 17.94A10.07 10.07 0 0112 20c-7 0-11-8-11-8a18.45 18.45 0 015.06-5.94M9.9 4.24A9.12 9.12 0 0112 4c7 0 11 8 11 8a18.5 18.5 0 01-2.16 3.19m-6.72-1.07a3 3 0 11-4.24-4.24"/><line x1="1" y1="1" x2="23" y2="23"/>';
-        } else {
-            maskedKey.textContent = maskKey(maskedKey.dataset.key);
-            maskedKey.classList.remove('key-revealed');
-            // Switch to "eye" icon
-            eyeIcon.innerHTML = '<path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/>';
-        }
-    });
-
-    // --- Logout ---
-    if (logoutBtn) {
-        logoutBtn.addEventListener('click', () => {
-            dashboardScreen.classList.remove('active');
-            loginScreen.classList.add('active');
-            keyInput.value = '';
-            loginError.textContent = '';
-            loginBtn.disabled = false;
-            loginBtn.querySelector('span').textContent = 'Authenticate';
-            keyVisible = false;
-            maskedKey.textContent = '••••••••••••';
-            maskedKey.classList.remove('key-revealed');
-            editingConfigId = null;
-        });
-    }
-
-    // --- Clear Editor ---
-    if (clearEditorBtn) {
-        clearEditorBtn.addEventListener('click', () => {
-            if (editor) {
-                editor.setValue('');
-                editingConfigId = null;
-                updateEditorStatus();
-                showToast('Editor cleared');
-            }
-        });
-    }
-
-    // --- Config Logic ---
-    saveBtn.addEventListener('click', () => {
-        if (editingConfigId) {
-            // If we're editing, skip the modal and update directly
-            const script = editor.getValue();
-            if (!script) {
-                showToast('Config script is empty', 'error');
-                return;
-            }
-            updateConfig(editingConfigId, null, script);
-        } else {
-            // New config — show modal for name
-            saveModal.classList.add('active');
-            configNameInput.value = '';
-            configNameInput.focus();
-            if (modalTitle) modalTitle.textContent = 'Save Configuration';
-            if (modalSaveLabel) modalSaveLabel.textContent = 'Save';
-        }
-    });
-
-    function closeModal() {
-        saveModal.classList.remove('active');
-        configNameInput.value = '';
-    }
-
-    modalCancelBtn.addEventListener('click', closeModal);
-    if (modalCloseBtn) modalCloseBtn.addEventListener('click', closeModal);
-
-    // Close modal on backdrop click
-    saveModal.addEventListener('click', (e) => {
-        if (e.target === saveModal) closeModal();
-    });
-
-    // Close modal on Escape
-    document.addEventListener('keydown', (e) => {
-        if (e.key === 'Escape' && saveModal.classList.contains('active')) {
-            closeModal();
-        }
-    });
-
-    modalOkBtn.addEventListener('click', () => {
-        const name = configNameInput.value.trim();
-        const script = editor.getValue();
-
-        if (!name) {
-            showToast('Please enter a config name', 'error');
-            return;
-        }
-        if (!script) {
-            showToast('Config script is empty', 'error');
-            return;
-        }
-
-        // Disable button to prevent double-clicks
-        modalOkBtn.disabled = true;
-        modalOkBtn.querySelector('span').textContent = 'Saving...';
-
-        fetch('/api/configs', {
+    function doAutoLogin(username, password) {
+        fetch('/api/login', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ name, script })
-        })
-            .then(res => {
-                if (!res.ok) throw new Error(`Server error: ${res.status}`);
-                return res.json();
-            })
-            .then(data => {
-                if (data.success) {
-                    savedConfigs.push(data.config);
-                    renderConfigs();
-                    updateStats();
-                    closeModal();
-                    showToast(`Config "${name}" saved successfully`);
-                }
-            })
-            .catch(err => {
-                showToast('Failed to save config — check if your script is too large', 'error');
-                console.error(err);
-            })
-            .finally(() => {
-                modalOkBtn.disabled = false;
-                if (modalSaveLabel) modalSaveLabel.textContent = 'Save';
-            });
-    });
-
-    configNameInput.addEventListener('keydown', (e) => {
-        if (e.key === 'Enter') modalOkBtn.click();
-    });
-
-    // --- Update Config (Edit) ---
-    function updateConfig(id, name, script) {
-        const payload = {};
-        if (name) payload.name = name;
-        if (script) payload.script = script;
-
-        fetch(`/api/configs/${id}`, {
-            method: 'PUT',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify(payload)
-        })
-            .then(res => {
-                if (!res.ok) throw new Error(`Server error: ${res.status}`);
-                return res.json();
-            })
-            .then(data => {
-                if (data.success) {
-                    const index = savedConfigs.findIndex(c => c.id === id);
-                    if (index !== -1) {
-                        savedConfigs[index] = data.config;
-                    }
-                    renderConfigs();
-                    showToast(`Config "${data.config.name}" updated successfully`);
-                }
-            })
-            .catch(err => {
-                showToast('Failed to update config', 'error');
-                console.error(err);
-            });
-    }
-
-    // --- Delete Config ---
-    function deleteConfig(id) {
-        fetch(`/api/configs/${id}`, {
-            method: 'DELETE'
+            body: JSON.stringify({ username, password })
         })
             .then(res => res.json())
             .then(data => {
                 if (data.success) {
-                    savedConfigs = savedConfigs.filter(c => c.id !== id);
-                    if (editingConfigId === id) {
-                        editingConfigId = null;
-                        updateEditorStatus();
+                    dashboardScreen.classList.add('active');
+                    const accountUsername = document.getElementById('account-username');
+                    if (accountUsername) accountUsername.textContent = username;
+
+                    if (maskedKey) {
+                        maskedKey.dataset.key = 'HIDDEN';
+                        maskedKey.textContent = '••••••••';
                     }
-                    if (activeConfigId === id) {
-                        activeConfigId = null;
-                        if (activeConfigName) {
-                            activeConfigName.textContent = 'None selected';
-                            activeConfigName.classList.remove('has-config');
+
+                    const tierBadge = document.getElementById('tier-badge');
+                    if (tierBadge) {
+                        if (data.user.role === 'Admin') {
+                            tierBadge.textContent = 'Admin';
+                            tierBadge.style.background = 'rgba(239, 68, 68, 0.2)';
+                            tierBadge.style.color = '#ef4444';
+                        } else {
+                            tierBadge.textContent = 'User';
+                            tierBadge.style.background = 'rgba(93, 156, 236, 0.2)';
+                            tierBadge.style.color = '#5d9cec';
                         }
                     }
-                    renderConfigs();
-                    updateStats();
-                    showToast(`Config deleted`);
+
+                    initEditor();
+                    fetchConfigs();
+                    showToast('Welcome back, ' + username);
+                } else {
+                    localStorage.removeItem('xvory-auth');
+                    loginScreen.classList.add('active');
                 }
             })
             .catch(err => {
-                showToast('Failed to delete config', 'error');
-                console.error(err);
+                loginScreen.classList.add('active');
             });
+    }
+
+    function doRegister() {
+        const username = regUsername.value.trim();
+        const password = regPassword.value.trim();
+        const license = regLicense.value.trim();
+
+        const turnstileElement = document.querySelector('#form-register [name="cf-turnstile-response"]');
+        const turnstileToken = turnstileElement ? turnstileElement.value : '';
+
+        if (!username || !password || !license) {
+            registerError.textContent = "Please fill all fields";
+            return;
+        }
+
+        if (!turnstileToken) {
+            registerError.textContent = "Please complete the Cloudflare verification";
+            return;
+        }
+
+        registerBtn.disabled = true;
+        registerBtn.querySelector('span').textContent = 'Registering...';
+
+        fetch('/api/register', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ username, password, license, cfToken: turnstileToken })
+        })
+            .then(res => res.json())
+            .then(data => {
+                if (data.success) {
+                    showToast('Registered successfully! Please login.');
+                    authTabs[0].click();
+                    loginUsername.value = username;
+                    loginPassword.value = '';
+                    registerBtn.disabled = false;
+                    registerBtn.querySelector('span').textContent = 'Register';
+                } else {
+                    registerError.textContent = data.message;
+                    registerBtn.disabled = false;
+                    registerBtn.querySelector('span').textContent = 'Register';
+                    if (window.turnstile && window.turnstileRegisterId !== null) window.turnstile.reset(window.turnstileRegisterId);
+                }
+            })
+            .catch(err => {
+                registerError.textContent = "Server connection failed";
+                registerBtn.disabled = false;
+                registerBtn.querySelector('span').textContent = 'Register';
+                if (window.turnstile && window.turnstileRegisterId !== null) window.turnstile.reset(window.turnstileRegisterId);
+            });
+    }
+
+    if (loginBtn) loginBtn.addEventListener('click', doLogin);
+    if (loginPassword) loginPassword.addEventListener('keydown', (e) => { if (e.key === 'Enter') doLogin(); });
+
+    if (registerBtn) registerBtn.addEventListener('click', doRegister);
+    if (regLicense) regLicense.addEventListener('keydown', (e) => { if (e.key === 'Enter') doRegister(); });
+
+    // --- Navigation ---
+    tabs.forEach(tab => {
+        tab.addEventListener('click', () => {
+            tabs.forEach(t => t.classList.remove('active'));
+            tabContents.forEach(c => c.classList.remove('active'));
+            tab.classList.add('active');
+            const target = tab.dataset.tab;
+            document.getElementById(`tab-${target}`).classList.add('active');
+            pageTitle.textContent = target === 'dashboard' ? 'Dashboard' : 'Config Editor';
+            if (target === 'config' && editor) setTimeout(() => editor.refresh(), 10);
+        });
+    });
+
+    if (copyKeyBtn) {
+        copyKeyBtn.addEventListener('click', () => {
+            if (maskedKey.dataset.key) {
+                navigator.clipboard.writeText(maskedKey.dataset.key);
+                showToast('Key copied to clipboard');
+            }
+        });
+    }
+
+    toggleKeyBtn.addEventListener('click', () => {
+        const eyeIcon = document.getElementById('eye-icon');
+        if (maskedKey.textContent.includes('•')) {
+            maskedKey.textContent = maskedKey.dataset.key;
+            eyeIcon.innerHTML = '<path d="M17.94 17.94A10.07 10.07 0 0112 20c-7 0-11-8-11-8a18.45 18.45 0 015.06-5.94M9.9 4.24A9.12 9.12 0 0112 4c7 0 11 8 11 8a18.5 18.5 0 01-2.16 3.19m-6.72-1.07a3 3 0 11-4.24-4.24"/><line x1="1" y1="1" x2="23" y2="23"/>';
+        } else {
+            maskedKey.textContent = maskKey(maskedKey.dataset.key);
+            eyeIcon.innerHTML = '<path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/>';
+        }
+    });
+
+    // --- Modals ---
+    if (setActiveBtn) {
+        setActiveBtn.addEventListener('click', () => {
+            setActiveModal.classList.add('active');
+            renderActiveModalConfigs();
+        });
+    }
+
+    function closeActiveModal() {
+        setActiveModal.classList.remove('active');
+        selectedConfigToActive = null;
+    }
+
+    if (activeModalClose) activeModalClose.addEventListener('click', closeActiveModal);
+    if (activeModalCancel) activeModalCancel.addEventListener('click', closeActiveModal);
+    if (activeModalConfirm) {
+        activeModalConfirm.addEventListener('click', () => {
+            if (selectedConfigToActive) {
+                setActiveConfig(selectedConfigToActive);
+                closeActiveModal();
+            } else {
+                showToast('Please select a config', 'error');
+            }
+        });
+    }
+
+    function renderActiveModalConfigs() {
+        if (!activeConfigListModal) return;
+        activeConfigListModal.innerHTML = '';
+        if (savedConfigs.length === 0) {
+            activeConfigListModal.innerHTML = '<p style="text-align:center; color:#888; padding:20px;">No configs saved yet</p>';
+            return;
+        }
+        savedConfigs.forEach(config => {
+            const item = document.createElement('div');
+            item.className = 'active-modal-item';
+            const isSelected = selectedConfigToActive === config.id;
+
+            item.style.padding = '12px 15px';
+            item.style.margin = '5px 0';
+            item.style.borderRadius = '12px';
+            item.style.cursor = 'pointer';
+            item.style.background = isSelected ? 'rgba(46, 204, 113, 0.15)' : 'rgba(255, 255, 255, 0.03)';
+            item.style.border = isSelected ? '1px solid #2ecc71' : '1px solid transparent';
+
+            item.innerHTML = `
+                <div style="display:flex; justify-content:space-between; align-items:center;">
+                    <span style="font-weight:600; color:${isSelected ? '#2ecc71' : '#fff'};">${config.name}</span>
+                    ${config.id === activeConfigId ? '<span style="font-size:10px; color:#2ecc71;">[ACTIVE]</span>' : ''}
+                </div>
+            `;
+
+            item.addEventListener('click', () => {
+                selectedConfigToActive = config.id;
+                renderActiveModalConfigs();
+            });
+            activeConfigListModal.appendChild(item);
+        });
     }
 
     function setActiveConfig(id) {
@@ -393,124 +486,155 @@ document.addEventListener('DOMContentLoaded', () => {
                         activeConfigName.textContent = cfg.name;
                         activeConfigName.classList.add('has-config');
                     }
-                    showToast(`"${data.activeConfig.name}" is now active`);
+                    showToast(`"${cfg.name}" is now active`);
                 }
             });
     }
 
-    function renderConfigs() {
-        configList.innerHTML = '';
+    // Logout Modal
+    if (logoutBtn) {
+        logoutBtn.onclick = () => {
+            logoutModal.classList.add('active');
+        };
+    }
 
+    if (logoutModalCancel) logoutModalCancel.onclick = () => logoutModal.classList.remove('active');
+    if (logoutModalClose) logoutModalClose.onclick = () => logoutModal.classList.remove('active');
+    if (logoutModalConfirm) {
+        logoutModalConfirm.onclick = () => {
+            localStorage.removeItem('xvory-auth');
+            window.location.reload();
+        };
+    }
+
+    // Delete Config
+    function openDeleteModal(config) {
+        configToDelete = config;
+        deleteConfigName.textContent = config.name;
+        deleteModal.classList.add('active');
+    }
+
+    if (deleteModalCancel) deleteModalCancel.onclick = () => deleteModal.classList.remove('active');
+    if (deleteModalClose) deleteModalClose.onclick = () => deleteModal.classList.remove('active');
+    if (deleteModalConfirm) {
+        deleteModalConfirm.onclick = () => {
+            if (configToDelete) {
+                fetch(`/api/configs/${configToDelete.id}`, { method: 'DELETE' })
+                    .then(res => res.json())
+                    .then(() => {
+                        savedConfigs = savedConfigs.filter(c => c.id !== configToDelete.id);
+                        renderConfigs();
+                        updateStats();
+                        deleteModal.classList.remove('active');
+                        showToast(`Deleted ${configToDelete.name}`);
+                    });
+            }
+        };
+    }
+
+    saveBtn.addEventListener('click', () => {
+        if (editingConfigId) {
+            updateConfig(editingConfigId, null, editor.getValue());
+        } else {
+            saveModal.classList.add('active');
+            configNameInput.value = '';
+            configNameInput.focus();
+        }
+    });
+
+    modalCancelBtn.addEventListener('click', () => saveModal.classList.remove('active'));
+    if (modalCloseBtn) modalCloseBtn.addEventListener('click', () => saveModal.classList.remove('active'));
+
+    modalOkBtn.addEventListener('click', () => {
+        const name = configNameInput.value.trim();
+        const script = editor.getValue();
+        if (!name) return showToast('Enter a name', 'error');
+
+        fetch('/api/configs', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ name, script })
+        })
+            .then(res => res.json())
+            .then(data => {
+                if (data.success) {
+                    savedConfigs.push(data.config);
+                    renderConfigs();
+                    updateStats();
+                    saveModal.classList.remove('active');
+                    showToast(`Saved ${name}`);
+                }
+            });
+    });
+
+    function renderConfigs() {
+        if (!configList) return;
+        configList.innerHTML = '';
         if (savedConfigs.length === 0) {
-            configList.innerHTML = `
-                <div class="empty-configs">
-                    <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
-                        <path d="M22 19a2 2 0 01-2 2H4a2 2 0 01-2-2V5a2 2 0 012-2h5l2 3h9a2 2 0 012 2z"/>
-                    </svg>
-                    <p>No configs saved yet</p>
-                    <span class="empty-hint">Write some code and hit Save to get started</span>
-                </div>`;
+            configList.innerHTML = '<div style="text-align:center; padding:40px; color:#555;">No configs</div>';
             return;
         }
 
         savedConfigs.forEach(config => {
             const el = document.createElement('div');
             el.className = 'config-item';
-            if (editingConfigId === config.id) el.classList.add('editing');
             if (activeConfigId === config.id) el.classList.add('is-active');
+            if (editingConfigId === config.id) el.classList.add('editing');
 
-            // Config info section
-            const infoEl = document.createElement('div');
-            infoEl.className = 'config-info';
+            el.innerHTML = `
+                <div class="config-info">
+                    <div class="name">${config.name}</div>
+                </div>
+                <div class="config-actions">
+                    <button class="btn-action edit-btn" title="Edit">
+                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M11 4H4a2 2 0 00-2 2v14a2 2 0 002 2h14a2 2 0 002-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 113 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>
+                    </button>
+                    <button class="btn-action delete-btn" title="Delete">
+                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 01-2 2H7a2 2 0 01-2-2V6m3 0V4a2 2 0 012-2h4a2 2 0 012 2v2"/></svg>
+                    </button>
+                </div>
+            `;
 
-            const nameEl = document.createElement('div');
-            nameEl.className = 'name';
-            nameEl.textContent = config.name;
-            nameEl.title = config.name;
-
-            const metaEl = document.createElement('div');
-            metaEl.className = 'config-meta';
-            const scriptSize = config.script ? config.script.length : 0;
-            const sizeStr = scriptSize > 1024 ? `${(scriptSize / 1024).toFixed(1)} KB` : `${scriptSize} B`;
-            metaEl.textContent = sizeStr;
-
-            infoEl.appendChild(nameEl);
-            infoEl.appendChild(metaEl);
-
-            // Actions section
-            const actions = document.createElement('div');
-            actions.className = 'actions';
-
-            // Edit button
-            const editBtn = document.createElement('button');
-            editBtn.className = 'btn-action edit-btn';
-            editBtn.innerHTML = `<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M11 4H4a2 2 0 00-2 2v14a2 2 0 002 2h14a2 2 0 002-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 013 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>`;
-            editBtn.title = 'Edit this config';
-            editBtn.onclick = () => {
-                editor.setValue(config.script);
+            el.querySelector('.edit-btn').onclick = () => {
                 editingConfigId = config.id;
-                updateEditorStatus();
-                renderConfigs();
-
-                // Switch to config tab
-                tabs.forEach(t => t.classList.remove('active'));
-                tabContents.forEach(c => c.classList.remove('active'));
-                document.querySelector('[data-tab="config"]').classList.add('active');
-                document.getElementById('tab-config').classList.add('active');
-                pageTitle.textContent = 'Config Editor';
-                setTimeout(() => editor.refresh(), 10);
-
-                showToast(`Editing "${config.name}"`);
-            };
-
-            // Load button
-            const loadBtn = document.createElement('button');
-            loadBtn.className = 'btn-action load-btn';
-            loadBtn.innerHTML = `<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>`;
-            loadBtn.title = 'Load into editor';
-            loadBtn.onclick = () => {
                 editor.setValue(config.script);
-                editingConfigId = null;
-                updateEditorStatus();
+                document.getElementById('nav-config').click();
                 renderConfigs();
-                showToast(`Loaded "${config.name}"`);
             };
 
-            // Set active button
-            const setBtn = document.createElement('button');
-            const isActive = activeConfigId === config.id;
-            setBtn.className = 'btn-action' + (isActive ? ' active-config' : ' set-btn');
-            setBtn.innerHTML = isActive
-                ? `<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 11.08V12a10 10 0 11-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/></svg>`
-                : `<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><line x1="8" y1="12" x2="16" y2="12"/></svg>`;
-            setBtn.title = isActive ? 'Currently active' : 'Set as active';
-
-            setBtn.onclick = () => {
-                if (activeConfigId !== config.id) {
-                    setActiveConfig(config.id);
-                }
+            el.querySelector('.delete-btn').onclick = () => {
+                openDeleteModal(config);
             };
-
-            // Delete button
-            const delBtn = document.createElement('button');
-            delBtn.className = 'btn-action delete-btn';
-            delBtn.innerHTML = `<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 01-2 2H7a2 2 0 01-2-2V6m3 0V4a2 2 0 012-2h4a2 2 0 012 2v2"/></svg>`;
-            delBtn.title = 'Delete this config';
-            delBtn.onclick = () => {
-                if (confirm(`Delete "${config.name}"?`)) {
-                    deleteConfig(config.id);
-                }
-            };
-
-            actions.appendChild(editBtn);
-            actions.appendChild(loadBtn);
-            actions.appendChild(setBtn);
-            actions.appendChild(delBtn);
-
-            el.appendChild(infoEl);
-            el.appendChild(actions);
 
             configList.appendChild(el);
+        });
+    }
+
+    function updateConfig(id, name, script) {
+        fetch(`/api/configs/${id}`, {
+            method: 'PUT',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ script })
+        })
+            .then(res => res.json())
+            .then(data => {
+                if (data.success) {
+                    const idx = savedConfigs.findIndex(c => c.id === id);
+                    savedConfigs[idx] = data.config;
+                    updateEditorStatus();
+                    renderConfigs();
+                    showToast('Updated successfully');
+                }
+            });
+    }
+
+    if (clearEditorBtn) {
+        clearEditorBtn.addEventListener('click', () => {
+            if (editor) editor.setValue('');
+            editingConfigId = null;
+            updateEditorStatus();
+            renderConfigs();
+            showToast('Editor cleared', 'info');
         });
     }
 });

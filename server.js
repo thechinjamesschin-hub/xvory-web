@@ -2,6 +2,8 @@ const express = require('express');
 const cors = require('cors');
 const path = require('path');
 const fs = require('fs');
+const https = require('https');
+const querystring = require('querystring');
 
 const app = express();
 const PORT = process.env.PORT || 3000;
@@ -15,6 +17,7 @@ app.use(express.static(path.join(__dirname, 'public')));
 // --- Persistent Storage ---
 let configs = [];
 let activeConfigId = null;
+let users = [];
 
 function loadData() {
     try {
@@ -23,18 +26,20 @@ function loadData() {
             const data = JSON.parse(raw);
             configs = data.configs || [];
             activeConfigId = data.activeConfigId || null;
-            console.log(`Loaded ${configs.length} configs from disk. Active: ${activeConfigId || 'none'}`);
+            users = data.users || [];
+            console.log(`Loaded ${configs.length} configs and ${users.length} users from disk. Active: ${activeConfigId || 'none'}`);
         }
     } catch (err) {
         console.error('Error loading data:', err.message);
         configs = [];
         activeConfigId = null;
+        users = [];
     }
 }
 
 function saveData() {
     try {
-        const data = JSON.stringify({ configs, activeConfigId }, null, 2);
+        const data = JSON.stringify({ configs, activeConfigId, users }, null, 2);
         fs.writeFileSync(DATA_FILE, data, 'utf8');
     } catch (err) {
         console.error('Error saving data:', err.message);
@@ -60,14 +65,101 @@ app.get('/', (req, res) => {
     }
 });
 
-const VALID_KEY = "xvory-admin";
+const VALID_KEYS = ["xvory-admin", "xvory-premium"];
+const TURNSTILE_SECRET = "0x4AAAAAADHAYQECG_1N00eyFLy7HRGBzIo";
 
-app.post('/api/verify', (req, res) => {
-    const { key } = req.body;
-    if (key === VALID_KEY) {
-        res.json({ success: true, message: "Valid Key" });
+function verifyTurnstileToken(token) {
+    return new Promise((resolve) => {
+        if (!token) return resolve(false);
+
+        const postData = querystring.stringify({
+            secret: TURNSTILE_SECRET,
+            response: token
+        });
+
+        const options = {
+            hostname: 'challenges.cloudflare.com',
+            port: 443,
+            path: '/turnstile/v0/siteverify',
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/x-www-form-urlencoded',
+                'Content-Length': Buffer.byteLength(postData)
+            }
+        };
+
+        const req = https.request(options, (res) => {
+            let data = '';
+            res.on('data', (chunk) => { data += chunk; });
+            res.on('end', () => {
+                try {
+                    const outcome = JSON.parse(data);
+                    console.log("Turnstile verification outcome:", outcome);
+                    resolve(outcome.success === true);
+                } catch (e) {
+                    console.error("Turnstile parse error:", e.message, "Raw:", data);
+                    resolve(false);
+                }
+            });
+        });
+
+        req.on('error', (e) => {
+            console.error("Turnstile request error:", e.message);
+            resolve(false);
+        });
+
+        req.write(postData);
+        req.end();
+    });
+}
+
+app.post('/api/register', async (req, res) => {
+    const { username, password, license, cfToken } = req.body;
+    if (!username || !password || !license || !cfToken) {
+        return res.status(400).json({ success: false, message: "Username, password, license, and verification token are required" });
+    }
+
+    const isHuman = await verifyTurnstileToken(cfToken);
+    if (!isHuman) {
+        return res.status(403).json({ success: false, message: "Cloudflare verification failed" });
+    }
+
+    if (!VALID_KEYS.includes(license)) {
+        return res.status(401).json({ success: false, message: "Invalid License Key" });
+    }
+
+    if (users.find(u => u.username === username)) {
+        return res.status(400).json({ success: false, message: "Username already exists" });
+    }
+
+    const newUser = { username, password, license, role: license === "xvory-admin" ? "Admin" : "User" };
+    users.push(newUser);
+    saveData();
+    res.json({ success: true, message: "Registered successfully" });
+});
+
+app.post('/api/login', async (req, res) => {
+    const { username, password, cfToken } = req.body;
+
+    // Auto-login (saved from localStorage) doesn't have cfToken, so we can make cfToken optional for login
+    // BUT since we want to protect the login form, if they use the form, they MUST send cfToken.
+    // If cfToken is provided, verify it.
+    if (cfToken) {
+        const isHuman = await verifyTurnstileToken(cfToken);
+        if (!isHuman) {
+            return res.status(403).json({ success: false, message: "Cloudflare verification failed" });
+        }
+    }
+
+    if (!username || !password) {
+        return res.status(400).json({ success: false, message: "Username and password are required" });
+    }
+
+    const user = users.find(u => u.username === username && u.password === password);
+    if (user) {
+        res.json({ success: true, message: "Login successful", user: { username: user.username, role: user.role } });
     } else {
-        res.status(401).json({ success: false, message: "Invalid Key" });
+        res.status(401).json({ success: false, message: "Invalid username or password" });
     }
 });
 

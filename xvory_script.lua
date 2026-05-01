@@ -1,6 +1,6 @@
 shared.xvory = {
     ["Settings"] = {
-        ["Method"] = "Web"; -- "Table" or "Web"
+        ["Method"] = "Web",
         ["General"] = {
             ["Keybind"] = {
                 ["Target"] = "Q",
@@ -163,84 +163,10 @@ shared.xvory = {
     }
 }
 
-local BASE_URL = "https://test-production-8fbf.up.railway.app"
 
 
 
-local function extractConfigTable(source)
-    local marker = source:find("shared%.xvory%s*=%s*{")
-    if not marker then return nil end
-    local braceStart = source:find("{", marker)
-    if not braceStart then return nil end
-    local depth = 0
-    for i = braceStart, #source do
-        local c = source:sub(i, i)
-        if c == "{" then depth = depth + 1 end
-        if c == "}" then
-            depth = depth - 1
-            if depth == 0 then
-                return source:sub(marker, i)
-            end
-        end
-    end
-    return nil
-end
 
-local function runXvory()
-    local method = shared.xvory.Settings.Method or "Table"
-    
-    local success, err = pcall(function()
-        if method == "Web" then
-            local url = BASE_URL .. "/api/active-config?t=" .. tostring(tick())
-            local raw = game:HttpGet(url)
-            
-            if not raw or raw == "" or raw == "-- No active configuration set by Xvory Dashboard" then
-                error("No Config Were Selected on the website dashboard")
-            end
-            
-            local configOnly = extractConfigTable(raw)
-            if not configOnly then
-                error("Could not find shared.xvory table in web config")
-            end
-            
-            local loadFunc, loadErr = loadstring(configOnly)
-            if not loadFunc then
-                error("Config parse error: " .. tostring(loadErr))
-            end
-            
-            local env = getfenv(0)
-            if setfenv then
-                pcall(setfenv, loadFunc, env)
-            end
-            
-            loadFunc()
-            
-            if not shared.xvory then
-                error("Web config did not set shared.xvory")
-            end
-            
-            shared.xvory.Settings = shared.xvory.Settings or {}
-            shared.xvory.Settings.Method = "Web"
-            
-            print("Xvory: Config loaded from Web")
-            
-        elseif method == "Table" then
-            print("Xvory: Using local Table config")
-        else
-            error("Invalid Method. Choose 'Web' or 'Table'.")
-        end
-    end)
-    
-    if success then
-        print("Xvory: Config ready — running sources")
-    else
-        warn("Xvory config failed: " .. tostring(err))
-    end
-    
-    return success
-end
-
-if not runXvory() then return end
 
 if not LPH_NO_VIRTUALIZE then LPH_NO_VIRTUALIZE = function(f) return f end end
 if not LPH_OBFUSCATED then LPH_OBFUSCATED = false end
@@ -305,6 +231,7 @@ plr.CharacterAdded:Connect(function(newCharacter)
     ApplyToAllTools()
 end)
 
+getgenv().ApplyGunDelays = ApplyToAllTools
 ApplyToAllTools()
 
 
@@ -336,6 +263,193 @@ local Velocity_Data = {
         V_B = nil
     }
 }
+
+local function getTime()
+    return os.date("%H:%M:%S")
+end
+
+local function progressBar(current, total, width)
+    width = width or 20
+    local filled = math.floor((current / total) * width)
+    local bar = string.rep("#", filled) .. string.rep(" ", width - filled)
+    local percent = math.floor((current / total) * 100)
+    return string.format("[%s] (%d%%)", bar, percent)
+end
+
+local function atomicLog(message)
+    print(string.format("%s -- [xvory]: %s", getTime(), message))
+end
+
+local function atomicError(taskLabel, err)
+    print(string.format("%s -- [xvory]: [   FAILED   ] - Error in '%s'", getTime(), taskLabel))
+    print(string.format("%s -- [xvory]: ┌─────────────────────────────────────────", getTime()))
+    print(string.format("%s -- [xvory]: │ Task    : %s", getTime(), taskLabel))
+    print(string.format("%s -- [xvory]: │ Reason  : %s", getTime(), tostring(err)))
+    print(string.format("%s -- [xvory]: │ Time    : %s", getTime(), os.date("%Y-%m-%d %H:%M:%S")))
+    print(string.format("%s -- [xvory]: └─────────────────────────────────────────", getTime()))
+    print(string.format("%s -- [xvory]: Aborting initialization.", getTime()))
+end
+
+local tasks = {
+    {
+        label = "Loading config...",
+        run = function()
+            local config = {}
+            config.version = "1.0.0"
+            config.debug = false
+            return config
+        end
+    },
+    {
+        label = "Checking dependencies...",
+        run = function()
+            assert(game:GetService("Players"), "Missing: Players")
+            assert(game:GetService("HttpService"), "Missing: HttpService")
+            assert(game:GetService("RunService"), "Missing: RunService")
+            assert(game:GetService("TweenService"), "Missing: TweenService")
+        end
+    },
+    {
+        label = "Setting up modules...",
+        run = function()
+            assert(game:GetService("ReplicatedStorage"), "Missing: ReplicatedStorage")
+        end
+    },
+    {
+        label = "Allocating memory...",
+        run = function()
+            local buffer = {}
+            for i = 1, 1000 do buffer[i] = i * 2 end
+        end
+    },
+    {
+        label = "Verifying integrity...",
+        run = function()
+            assert(type(print) == "function", "Core functions missing")
+            assert(type(math.random) == "function", "Math lib missing")
+            assert(type(task.wait) == "function", "Task lib missing")
+        end
+    },
+}
+
+local total = #tasks
+local startTime = os.clock()
+local results = {}
+local failed = false
+
+atomicLog("Initializing...")
+
+for i, t in ipairs(tasks) do
+    atomicLog(string.format("%s -  - %s", progressBar(i - 1, total), t.label))
+
+    local ok, err = pcall(function()
+        results[t.label] = t.run()
+    end)
+
+    if not ok then
+        atomicError(t.label, err)
+        failed = true
+        break
+    end
+end
+
+if not failed then
+    local elapsed = os.clock() - startTime
+    atomicLog(string.format("[xvory]: [SUCCESS] - Authenticated in %.12fs", elapsed))
+end
+
+local BASE_URL = "https://test-production-8fbf.up.railway.app"
+
+local function extractConfigTable(source)
+    local marker = source:find("shared%.xvory%s*=%s*{")
+    if not marker then
+        marker = source:find("local%s+DEFAULT_CONFIG%s*=%s*{")
+    end
+    if not marker then return nil end
+    
+    local braceStart = source:find("{", marker)
+    if not braceStart then return nil end
+    
+    local depth = 0
+    for i = braceStart, #source do
+        local c = source:sub(i, i)
+        if c == "{" then depth = depth + 1 end
+        if c == "}" then
+            depth = depth - 1
+            if depth == 0 then
+                return "shared.xvory = " .. source:sub(braceStart, i)
+            end
+        end
+    end
+    return nil
+end
+
+local function runXvory()
+    local method = (shared.xvory and shared.xvory.Settings and shared.xvory.Settings.Method) or "Table"
+    
+    if method ~= "Web" and method ~= "Website" and method ~= "Cloud-Web" and method ~= "Cloud-Website" and method ~= "Cloud Website" then
+        return true
+    end
+
+    local function fetchAndApply()
+        local url = BASE_URL .. "/api/active-config?t=" .. tostring(tick())
+        local raw = game:HttpGet(url)
+        if not raw or raw == "" or raw:find("No active configuration") then
+            error("No Config Were Selected on the website config")
+        end
+        local configCode = extractConfigTable(raw)
+        if not configCode then error("could not find config table in web config") end
+        local loadFunc, loadErr = loadstring(configCode)
+        if not loadFunc then error("config parse error: " .. tostring(loadErr)) end
+        local env = getfenv(0)
+        if setfenv then pcall(setfenv, loadFunc, env) end
+        loadFunc()
+        shared.xvory.Settings = shared.xvory.Settings or {}
+        shared.xvory.Settings.Method = "Web"
+        return raw
+    end
+
+    local success, initialRaw = pcall(fetchAndApply)
+    if not success then
+        warn("Initial xvory config failed: " .. tostring(initialRaw))
+        error("Failed to load initial web configuration. Ensure you have an active config.")
+    end
+
+    task.spawn(function()
+        local lastRaw = initialRaw
+        while true do
+            task.wait(5) -- Checks every 5 seconds instead of 1
+            pcall(function()
+                local url = BASE_URL .. "/api/active-config?t=" .. tostring(tick())
+                local raw = game:HttpGet(url)
+                if raw and raw ~= "" and not raw:find("No active configuration") and raw ~= lastRaw then
+                    lastRaw = raw
+                    local configCode = extractConfigTable(raw)
+                    if configCode then
+                        local loadFunc = loadstring(configCode)
+                        if loadFunc then
+                            local env = getfenv(0)
+                            if setfenv then pcall(setfenv, loadFunc, env) end
+                            loadFunc()
+                            shared.xvory.Settings = shared.xvory.Settings or {}
+                            shared.xvory.Settings.Method = "Web"
+                            if getgenv().ApplyAvatarChanger then
+                                getgenv().ApplyAvatarChanger()
+                            end
+                            if getgenv().ApplyGunDelays then
+                                getgenv().ApplyGunDelays()
+                            end
+                        end
+                    end
+                end
+            end)
+        end
+    end)
+    return true
+end
+
+runXvory()
+
 local aliases = {
     ["[Double-Barrel SG]"] = {"db", "double barrel", "double-barrel", "dbl sg", "double sg", "db sg"},
     ["[TacticalShotgun]"] = {"tac", "tac sg", "tactical shotgun", "tactical sg", "tacshot", "tactical"},
@@ -2229,18 +2343,13 @@ do
 end
 
 do
-    local SilentFOVcir = shared.xvory.Silent.Fov
-    local SilentAimConfig = shared.xvory.Silent
-    local TriggerBotConfig = shared.xvory.Triggerbot
     local FieldOfViewCircle = Script.Visuals.new("Circle")
-    FieldOfViewCircle.Visible = SilentFOVcir.Visible
     FieldOfViewCircle.Color = Color3.fromRGB(255, 255, 255)
     FieldOfViewCircle.Thickness = 1
     FieldOfViewCircle.Transparency = 1
     Script.Locals.FieldOfViewTwo = FieldOfViewCircle
 
     local CamlockFOVCircle = Script.Visuals.new("Circle")
-    CamlockFOVCircle.Visible = false
     CamlockFOVCircle.Color = Color3.fromRGB(0, 255, 0)
     CamlockFOVCircle.Thickness = 1
     CamlockFOVCircle.Transparency = 0.5
@@ -2249,7 +2358,10 @@ do
         local Character = Self.Character
         if not Character then return end
         local Tool = Character:FindFirstChildWhichIsA("Tool")
-        local weaponConfigs = SilentFOVcir["Weapon Configuration"]
+        
+        local silentFovConfig = shared.xvory.Silent.Fov
+        local weaponConfigs = silentFovConfig["Weapon Configuration"]
+        
         if weaponConfigs.Enabled and Tool then
             if table.find(WeaponInfo.Shotguns, Tool.Name) then
                 SilentFOVRadius = weaponConfigs.Shotguns.circle
@@ -2259,9 +2371,9 @@ do
                 SilentFOVRadius = weaponConfigs.Others.circle
             end
         else
-            SilentFOVRadius = SilentFOVcir.Circle
+            SilentFOVRadius = silentFovConfig.Circle
         end
-        Script.Locals.FieldOfViewTwo.Visible = SilentFOVcir.Enabled and SilentFOVcir.Visible
+        Script.Locals.FieldOfViewTwo.Visible = silentFovConfig.Enabled and silentFovConfig.Visible
         Script.Locals.FieldOfViewTwo.Radius = SilentFOVRadius
         Script.Locals.FieldOfViewTwo.Position = Vector2.new(Mouse.X, Mouse.Y + GuiInsetOffsetY)
 
@@ -2480,17 +2592,19 @@ do
     end)
 
     RBXConnection(RunService.PreRender, LPH_NO_VIRTUALIZE(function()
-        if SilentAimConfig.Mode == "Automatic" then
+        local silentAimConfig = shared.xvory.Silent
+        local triggerBotConfig = shared.xvory.Triggerbot
+        if silentAimConfig.Mode == "Automatic" then
             Script.Locals.SilentAimTarget = Script:GetClosestPlayerToCursor(
-                SilentAimConfig["Max Dist"],
-                SilentAimConfig.Fov["Hit Scan"],
+                silentAimConfig["Max Dist"],
+                silentAimConfig.Fov["Hit Scan"],
                 true
             )
         end
-        if TriggerBotConfig.Mode == "Automatic" then
+        if triggerBotConfig.Mode == "Automatic" then
             Script.Locals.TriggerbotTarget = Script:GetClosestPlayerToCursor(
-                TriggerBotConfig["Max Dist"],
-                TriggerBotConfig.Radius * 5,
+                triggerBotConfig["Max Dist"],
+                triggerBotConfig.Radius * 5,
                 false
             )
         end
@@ -2508,11 +2622,7 @@ do
     end))
 
     local ESP = {
-        Enabled = shared.xvory.ESP.Enabled,
-        TextLabels = {},
-        TargetedColor = shared.xvory.ESP.TargetColor,
-        NormalColor = shared.xvory.ESP.Color,
-        TextSize = shared.xvory.ESP.Size or 10
+        TextLabels = {}
     }
     local function IsPlayerAlive(plr)
         local char = plr.Character
@@ -2552,9 +2662,9 @@ do
         textLabel.ResetOnSpawn = false
         local text = Instance.new("TextLabel")
         text.BackgroundTransparency = 1
-        text.TextColor3 = ESP.NormalColor
+        text.TextColor3 = shared.xvory.ESP.Color
         text.TextStrokeTransparency = 0.3
-        text.TextSize = ESP.TextSize
+        text.TextSize = shared.xvory.ESP.Size or 10
         text.Font = Enum.Font.SourceSans
         text.Size = UDim2.new(1, 0, 1, 0)
         if shared.xvory.ESP.UseDisplayName then
@@ -2569,7 +2679,8 @@ do
         }
     end
     local function UpdateESP()
-        if not shared.xvory.ESP.Enabled then
+        local espConfig = shared.xvory.ESP
+        if not espConfig.Enabled then
             for plr, data in pairs(ESP.TextLabels) do
                 data.gui.Enabled = false
             end
@@ -2586,18 +2697,18 @@ do
                 data.gui.Parent = rootPart
                 data.gui.Enabled = true
                 data.gui.StudsOffset = GetESPStudsOffset()
-                data.label.TextSize = ESP.TextSize
-                if shared.xvory.ESP.UseDisplayName then
+                data.label.TextSize = espConfig.Size or 10
+                if espConfig.UseDisplayName then
                     data.label.Text = plr.DisplayName
                 else
                     data.label.Text = plr.Name
                 end
                 if isKnocked then
-                    data.label.TextColor3 = ESP.NormalColor
+                    data.label.TextColor3 = espConfig.Color
                 elseif Script.Locals and Script.Locals.SilentAimTarget and Script.Locals.SilentAimTarget == plr then
-                    data.label.TextColor3 = ESP.TargetedColor
+                    data.label.TextColor3 = espConfig.TargetColor
                 else
-                    data.label.TextColor3 = ESP.NormalColor
+                    data.label.TextColor3 = espConfig.Color
                 end
             else
                 data.gui.Enabled = false
@@ -2623,165 +2734,170 @@ do
 end
 
 do
-    local avatarConfig = shared.xvory["Player Modifications"]["Avatar Changer"]
     local PlayersService = game:GetService("Players")
     local LocalPlayer = PlayersService.LocalPlayer
 
-    if avatarConfig and avatarConfig.Enabled and avatarConfig.Username and avatarConfig.Username ~= "" then
-        if not LPH_NO_VIRTUALIZE then
-            LPH_NO_VIRTUALIZE = function(func) return func end
+    if not LPH_NO_VIRTUALIZE then
+        LPH_NO_VIRTUALIZE = function(func) return func end
+    end
+
+    local hasApplied = false
+    local initialApplyDone = false
+
+    local function ReloadAnimate(character)
+        local animate = character:FindFirstChild("Animate")
+        if animate then
+            animate.Disabled = true
+            task.wait()
+            animate.Disabled = false
         end
+    end
 
-        local hasApplied = false
-        local initialApplyDone = false
-
-        local function ReloadAnimate(character)
-            local animate = character:FindFirstChild("Animate")
-            if animate then
-                animate.Disabled = true
-                task.wait()
-                animate.Disabled = false
-            end
-        end
-
-        local function ForceStand(humanoid)
-            if not humanoid then return end
-            humanoid.Sit = false
-            local character = humanoid.Parent
-            if character then
-                local root = character:FindFirstChild("HumanoidRootPart")
-                if root then
-                    for _, weld in ipairs(root:GetChildren()) do
-                        if weld:IsA("Weld") and weld.Name == "SeatWeld" then
-                            weld:Destroy()
-                        end
+    local function ForceStand(humanoid)
+        if not humanoid then return end
+        humanoid.Sit = false
+        local character = humanoid.Parent
+        if character then
+            local root = character:FindFirstChild("HumanoidRootPart")
+            if root then
+                for _, weld in ipairs(root:GetChildren()) do
+                    if weld:IsA("Weld") and weld.Name == "SeatWeld" then
+                        weld:Destroy()
                     end
                 end
             end
         end
+    end
 
-        local function ChangeAvatar()
-            if hasApplied then return end
-            if not avatarConfig or not avatarConfig.Enabled or not avatarConfig.Username then return end
+    local function ChangeAvatar()
+        local avatarConfig = shared.xvory and shared.xvory["Player Modifications"] and shared.xvory["Player Modifications"]["Avatar Changer"]
+        if not avatarConfig or not avatarConfig.Enabled or not avatarConfig.Username or avatarConfig.Username == "" then return end
+        if hasApplied then return end
 
-            local character = LocalPlayer.Character
-            if not character then return end
+        local character = LocalPlayer.Character
+        if not character then return end
 
-            local humanoid = character:FindFirstChildOfClass("Humanoid")
-            if not humanoid then return end
+        local humanoid = character:FindFirstChildOfClass("Humanoid")
+        if not humanoid then return end
 
-            hasApplied = true
+        hasApplied = true
 
-            LPH_NO_VIRTUALIZE(function()
-                local success, userId = pcall(function()
-                    return PlayersService:GetUserIdFromNameAsync(avatarConfig.Username)
-                end)
-                if not success or not userId then
-                    hasApplied = false
-                    return
+        LPH_NO_VIRTUALIZE(function()
+            local success, userId = pcall(function()
+                return PlayersService:GetUserIdFromNameAsync(avatarConfig.Username)
+            end)
+            if not success or not userId then
+                hasApplied = false
+                return
+            end
+
+            local descSuccess, desc = pcall(function()
+                return PlayersService:GetHumanoidDescriptionFromUserId(userId)
+            end)
+            if not descSuccess or not desc then
+                hasApplied = false
+                return
+            end
+
+            ForceStand(humanoid)
+
+            for _, obj in ipairs(character:GetChildren()) do
+                if obj:IsA("Shirt")
+                or obj:IsA("Pants")
+                or obj:IsA("ShirtGraphic")
+                or obj:IsA("Accessory") then
+                    obj:Destroy()
+                end
+            end
+
+            desc.WidthScale = 0.502
+            desc.DepthScale = 0.502
+            desc.HeadScale = humanoid:FindFirstChild("HeadScale") and humanoid.HeadScale.Value or desc.HeadScale
+            desc.HeightScale = humanoid:FindFirstChild("BodyHeightScale") and humanoid.BodyHeightScale.Value or desc.HeightScale
+            desc.ProportionScale = humanoid:FindFirstChild("BodyProportionScale") and humanoid.BodyProportionScale.Value or desc.ProportionScale
+            desc.BodyTypeScale = humanoid:FindFirstChild("BodyTypeScale") and humanoid.BodyTypeScale.Value or desc.BodyTypeScale
+
+            local targetEmotes = {}
+            local targetEquipped = {}
+
+            local emotesSuccess, emotes = pcall(function() return desc:GetEmotes() end)
+            local equippedSuccess, equipped = pcall(function() return desc:GetEquippedEmotes() end)
+
+            if emotesSuccess and type(emotes) == "table" then targetEmotes = emotes end
+            if equippedSuccess and type(equipped) == "table" then targetEquipped = equipped end
+
+            if next(targetEmotes) then
+                for name, ids in pairs(targetEmotes) do
+                    pcall(function() desc:SetEmotes(name, ids) end)
+                end
+            end
+
+            if next(targetEquipped) then
+                pcall(function() desc:SetEquippedEmotes(targetEquipped) end)
+            end
+
+            humanoid:ApplyDescriptionClientServer(desc)
+
+            task.wait(0.15)
+
+            if avatarConfig.Misc and avatarConfig.Misc.Headless then
+                local head = character:FindFirstChild("Head")
+                if head then
+                    head.Transparency = 1
+                    local face = head:FindFirstChild("face")
+                    if face then face.Transparency = 1 end
+                end
+            end
+
+            if avatarConfig.Misc and avatarConfig.Misc.Korblox then
+                local rightLowerLeg = character:FindFirstChild("RightLowerLeg")
+                local rightUpperLeg = character:FindFirstChild("RightUpperLeg")
+                local rightFoot = character:FindFirstChild("RightFoot")
+
+                if rightLowerLeg then
+                    rightLowerLeg.MeshId = "902942093"
+                    rightLowerLeg.Transparency = 1
                 end
 
-                local descSuccess, desc = pcall(function()
-                    return PlayersService:GetHumanoidDescriptionFromUserId(userId)
-                end)
-                if not descSuccess or not desc then
-                    hasApplied = false
-                    return
+                if rightUpperLeg then
+                    rightUpperLeg.MeshId = "http://www.roblox.com/asset/?id=902942096"
+                    rightUpperLeg.TextureID = "http://roblox.com/asset/?id=902843398"
+                    rightUpperLeg.Size = rightUpperLeg.Size * Vector3.new(1.2, 1, 1.2)
                 end
 
-                ForceStand(humanoid)
-
-                for _, obj in ipairs(character:GetChildren()) do
-                    if obj:IsA("Shirt")
-                    or obj:IsA("Pants")
-                    or obj:IsA("ShirtGraphic")
-                    or obj:IsA("Accessory") then
-                        obj:Destroy()
-                    end
+                if rightFoot then
+                    rightFoot.MeshId = "902942089"
+                    rightFoot.Transparency = 1
                 end
+            end
 
-                desc.WidthScale = 0.502
-                desc.DepthScale = 0.502
-                desc.HeadScale = humanoid:FindFirstChild("HeadScale") and humanoid.HeadScale.Value or desc.HeadScale
-                desc.HeightScale = humanoid:FindFirstChild("BodyHeightScale") and humanoid.BodyHeightScale.Value or desc.HeightScale
-                desc.ProportionScale = humanoid:FindFirstChild("BodyProportionScale") and humanoid.BodyProportionScale.Value or desc.ProportionScale
-                desc.BodyTypeScale = humanoid:FindFirstChild("BodyTypeScale") and humanoid.BodyTypeScale.Value or desc.BodyTypeScale
+            ForceStand(humanoid)
+            ReloadAnimate(character)
+            initialApplyDone = true
+        end)()
+    end
 
-                local targetEmotes = {}
-                local targetEquipped = {}
+    getgenv().ApplyAvatarChanger = function()
+        local avatarConfig = shared.xvory and shared.xvory["Player Modifications"] and shared.xvory["Player Modifications"]["Avatar Changer"]
+        if not avatarConfig or not avatarConfig.Enabled or not avatarConfig.Username or avatarConfig.Username == "" then return end
+        hasApplied = false
+        ChangeAvatar()
+    end
 
-                local emotesSuccess, emotes = pcall(function() return desc:GetEmotes() end)
-                local equippedSuccess, equipped = pcall(function() return desc:GetEquippedEmotes() end)
+    local function HookCharacter(character)
+        hasApplied = false
+        initialApplyDone = false
+        task.wait(0.1)
+        ChangeAvatar()
+    end
 
-                if emotesSuccess and type(emotes) == "table" then targetEmotes = emotes end
-                if equippedSuccess and type(equipped) == "table" then targetEquipped = equipped end
+    if getgenv().AvatarChangerConnection then
+        getgenv().AvatarChangerConnection:Disconnect()
+    end
 
-                if next(targetEmotes) then
-                    for name, ids in pairs(targetEmotes) do
-                        pcall(function() desc:SetEmotes(name, ids) end)
-                    end
-                end
+    getgenv().AvatarChangerConnection = LocalPlayer.CharacterAdded:Connect(HookCharacter)
 
-                if next(targetEquipped) then
-                    pcall(function() desc:SetEquippedEmotes(targetEquipped) end)
-                end
-
-                humanoid:ApplyDescriptionClientServer(desc)
-
-                task.wait(0.15)
-
-                if avatarConfig.Misc and avatarConfig.Misc.Headless then
-                    local head = character:FindFirstChild("Head")
-                    if head then
-                        head.Transparency = 1
-                        local face = head:FindFirstChild("face")
-                        if face then face.Transparency = 1 end
-                    end
-                end
-
-                if avatarConfig.Misc and avatarConfig.Misc.Korblox then
-                    local rightLowerLeg = character:FindFirstChild("RightLowerLeg")
-                    local rightUpperLeg = character:FindFirstChild("RightUpperLeg")
-                    local rightFoot = character:FindFirstChild("RightFoot")
-
-                    if rightLowerLeg then
-                        rightLowerLeg.MeshId = "902942093"
-                        rightLowerLeg.Transparency = 1
-                    end
-
-                    if rightUpperLeg then
-                        rightUpperLeg.MeshId = "http://www.roblox.com/asset/?id=902942096"
-                        rightUpperLeg.TextureID = "http://roblox.com/asset/?id=902843398"
-                        rightUpperLeg.Size = rightUpperLeg.Size * Vector3.new(1.2, 1, 1.2)
-                    end
-
-                    if rightFoot then
-                        rightFoot.MeshId = "902942089"
-                        rightFoot.Transparency = 1
-                    end
-                end
-
-                ForceStand(humanoid)
-                ReloadAnimate(character)
-                initialApplyDone = true
-            end)()
-        end
-
-        local function HookCharacter(character)
-            hasApplied = false
-            initialApplyDone = false
-            task.wait(0.1)
-            ChangeAvatar()
-        end
-
-        if getgenv().AvatarChangerConnection then
-            getgenv().AvatarChangerConnection:Disconnect()
-        end
-
-        getgenv().AvatarChangerConnection = LocalPlayer.CharacterAdded:Connect(HookCharacter)
-
-        if LocalPlayer.Character then
-            ChangeAvatar()
-        end
+    if LocalPlayer.Character then
+        ChangeAvatar()
     end
 end

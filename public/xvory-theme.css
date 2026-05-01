@@ -1,192 +1,143 @@
-/* ══════════════════════════════════════════════════════════
-   XVORY — Custom CodeMirror Theme
-   A sleek, dark editor theme with red-accent highlights
-   matching the Xvory brand identity.
-   ══════════════════════════════════════════════════════════ */
-
+/* Xvory CodeMirror Theme - Match Image Style */
 .cm-s-xvory.CodeMirror {
-    background: #0c0c14 !important;
-    color: #c8c8d4 !important;
-    font-family: 'JetBrains Mono', 'Fira Code', 'Cascadia Code', monospace !important;
-    font-size: 13.5px !important;
-    line-height: 1.7 !important;
-    letter-spacing: 0.3px;
+    background: #0a0a0c;
+    color: #ffffff;
 }
 
-/* ── Gutters ── */
-.cm-s-xvory .CodeMirror-gutters {
-    background: #0a0a12 !important;
-    border-right: 1px solid rgba(255, 255, 255, 0.04) !important;
-    padding-right: 4px;
-}
-
-.cm-s-xvory .CodeMirror-linenumber {
-    color: #33334a !important;
-    font-size: 12px !important;
-    padding: 0 8px 0 12px !important;
-    min-width: 32px !important;
-    transition: color 0.15s ease;
-}
-
-.cm-s-xvory .CodeMirror-activeline .CodeMirror-linenumber {
-    color: #ff4a4a !important;
-}
-
-/* ── Active Line ── */
-.cm-s-xvory .CodeMirror-activeline-background {
-    background: rgba(255, 58, 58, 0.04) !important;
-}
-
-/* ── Cursor ── */
-.cm-s-xvory .CodeMirror-cursor {
-    border-left: 2px solid #ff3a3a !important;
-    border-right: none;
-}
-
-.cm-s-xvory .CodeMirror-cursor.CodeMirror-overwrite {
-    border-left: none;
-    border-bottom: 2px solid #ff3a3a !important;
-}
-
-/* ── Selection ── */
-.cm-s-xvory .CodeMirror-selected {
-    background: rgba(255, 58, 58, 0.12) !important;
-}
-
-.cm-s-xvory.CodeMirror-focused .CodeMirror-selected {
-    background: rgba(255, 58, 58, 0.18) !important;
+.cm-s-xvory div.CodeMirror-selected {
+    background: rgba(255, 255, 255, 0.1);
 }
 
 .cm-s-xvory .CodeMirror-line::selection,
-.cm-s-xvory .CodeMirror-line > span::selection,
-.cm-s-xvory .CodeMirror-line > span > span::selection {
-    background: rgba(255, 58, 58, 0.2);
+.cm-s-xvory .CodeMirror-line>span::selection,
+.cm-s-xvory .CodeMirror-line>span>span::selection {
+    background: rgba(255, 255, 255, 0.1);
 }
 
-/* ── Matching Brackets ── */
-.cm-s-xvory .CodeMirror-matchingbracket {
-    color: #ff6b6b !important;
-    background: rgba(255, 58, 58, 0.15) !important;
-    border-bottom: 1px solid #ff3a3a !important;
-    font-weight: 600;
+.cm-s-xvory .CodeMirror-gutters {
+    background: #0a0a0c;
+    border-right: 1px solid rgba(255, 255, 255, 0.05);
 }
 
-.cm-s-xvory .CodeMirror-nonmatchingbracket {
-    color: #ef4444 !important;
-    background: rgba(239, 68, 68, 0.2) !important;
+.cm-s-xvory .CodeMirror-linenumber {
+    color: #3e3e42;
+    padding-left: 10px;
+    padding-right: 10px;
 }
 
-/* ══════════════════════════════════════════════════════════
-   SYNTAX HIGHLIGHTING — Curated color palette
-   ══════════════════════════════════════════════════════════ */
+.cm-s-xvory .CodeMirror-cursor {
+    border-left: 2px solid #ffffff;
+}
 
-/* Keywords: if, then, end, for, while, function, local, return */
+.cm-s-xvory .CodeMirror-activeline-background {
+    background: rgba(255, 255, 255, 0.02);
+}
+
+/* Syntax Highlighting based on image */
 .cm-s-xvory span.cm-keyword {
-    color: #ff5c8a !important;
-    font-weight: 500;
+    color: #bd93f9;
 }
 
-/* Numbers */
+/* true/false - Purple */
+.cm-s-xvory span.cm-atom {
+    color: #bd93f9;
+}
+
 .cm-s-xvory span.cm-number {
-    color: #f0a050 !important;
+    color: #ff79c6;
 }
 
-/* Strings */
-.cm-s-xvory span.cm-string {
-    color: #7dd3a0 !important;
+/* Numbers - Pink/Red */
+.cm-s-xvory span.cm-def {
+    color: #8be9fd;
 }
 
-.cm-s-xvory span.cm-string-2 {
-    color: #5bc8af !important;
-}
-
-/* Comments */
-.cm-s-xvory span.cm-comment {
-    color: #4a4a65 !important;
-    font-style: italic;
-}
-
-/* Variables / Identifiers */
+/* Function Defs - Cyan */
 .cm-s-xvory span.cm-variable {
-    color: #c8c8d4 !important;
+    color: #ffffff;
 }
 
 .cm-s-xvory span.cm-variable-2 {
-    color: #88b4e7 !important;
+    color: #8be9fd;
 }
 
 .cm-s-xvory span.cm-variable-3 {
-    color: #c4a0f5 !important;
+    color: #8be9fd;
 }
 
-/* Built-in / Globals */
-.cm-s-xvory span.cm-builtin {
-    color: #66d9ef !important;
-    font-weight: 500;
-}
-
-/* Atoms: true, false, nil */
-.cm-s-xvory span.cm-atom {
-    color: #c4a0f5 !important;
-    font-weight: 500;
-}
-
-/* Operators */
-.cm-s-xvory span.cm-operator {
-    color: #ff7b93 !important;
-}
-
-/* Properties / Attributes */
 .cm-s-xvory span.cm-property {
-    color: #7cb8ff !important;
+    color: #8be9fd;
 }
 
-/* Definitions (function names) */
-.cm-s-xvory span.cm-def {
-    color: #64b5f6 !important;
-    font-weight: 600;
+/* Property names - Cyan */
+.cm-s-xvory span.cm-operator {
+    color: #ffffff;
 }
 
-/* Tags (for mixed mode) */
+/* Operators - White */
+.cm-s-xvory span.cm-comment {
+    color: #6272a4;
+    font-style: italic;
+}
+
+/* Comments - GreyBlue */
+.cm-s-xvory span.cm-string {
+    color: #8be9fd;
+}
+
+/* Strings - Cyan (per image keys) */
+.cm-s-xvory span.cm-string-2 {
+    color: #8be9fd;
+}
+
+.cm-s-xvory span.cm-meta {
+    color: #ff79c6;
+}
+
+.cm-s-xvory span.cm-qualifier {
+    color: #50fa7b;
+}
+
+.cm-s-xvory span.cm-builtin {
+    color: #8be9fd;
+}
+
+.cm-s-xvory span.cm-bracket {
+    color: #ffffff;
+}
+
+/* Brackets - White */
 .cm-s-xvory span.cm-tag {
-    color: #ff5c8a !important;
+    color: #ff79c6;
 }
 
 .cm-s-xvory span.cm-attribute {
-    color: #c4a0f5 !important;
+    color: #50fa7b;
 }
 
-/* Meta */
-.cm-s-xvory span.cm-meta {
-    color: #78787a !important;
+.cm-s-xvory span.cm-header {
+    color: #bd93f9;
 }
 
-/* Error */
-.cm-s-xvory span.cm-error {
-    color: #ff3a3a !important;
-    background: rgba(255, 58, 58, 0.1) !important;
-    border-bottom: 1px wavy #ff3a3a;
+.cm-s-xvory span.cm-quote {
+    color: #8be9fd;
 }
 
-/* ── Scrollbar Customization inside editor ── */
-.cm-s-xvory .CodeMirror-vscrollbar::-webkit-scrollbar,
-.cm-s-xvory .CodeMirror-hscrollbar::-webkit-scrollbar {
-    width: 8px;
-    height: 8px;
+.cm-s-xvory span.cm-link {
+    color: #bd93f9;
 }
 
-.cm-s-xvory .CodeMirror-vscrollbar::-webkit-scrollbar-track,
-.cm-s-xvory .CodeMirror-hscrollbar::-webkit-scrollbar-track {
-    background: transparent;
+.cm-s-xvory span.cm-special {
+    color: #ff79c6;
 }
 
-.cm-s-xvory .CodeMirror-vscrollbar::-webkit-scrollbar-thumb,
-.cm-s-xvory .CodeMirror-hscrollbar::-webkit-scrollbar-thumb {
-    background: rgba(255, 58, 58, 0.15);
-    border-radius: 4px;
+/* Match Brackets */
+.cm-s-xvory .CodeMirror-matchingbracket {
+    border-bottom: 1px solid #ff79c6;
+    color: white !important;
 }
 
-.cm-s-xvory .CodeMirror-vscrollbar::-webkit-scrollbar-thumb:hover,
-.cm-s-xvory .CodeMirror-hscrollbar::-webkit-scrollbar-thumb:hover {
-    background: rgba(255, 58, 58, 0.3);
+.CodeMirror-matchingbracket {
+    background-color: rgba(255, 255, 255, 0.1);
+    color: #fff !important;
 }
