@@ -2772,7 +2772,6 @@ do
                 if rightUpperLeg then
                     pcall(function() rightUpperLeg.MeshId = "http://www.roblox.com/asset/?id=902942096" end)
                     rightUpperLeg.TextureID = "http://roblox.com/asset/?id=902843398"
-                    rightUpperLeg.Size = rightUpperLeg.Size * Vector3.new(1.2, 1, 1.2)
                 end
                 if rightFoot then
                     pcall(function() rightFoot.MeshId = "902942089" end)

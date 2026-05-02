@@ -14,7 +14,6 @@
     --red: #ef4444;
 }
 
-/* Custom Scrollbar Styling */
 ::-webkit-scrollbar {
     width: 8px;
     height: 8px;
@@ -34,7 +33,6 @@
     background: rgba(255, 58, 58, 0.3);
 }
 
-/* For Firefox */
 * {
     scrollbar-width: thin;
     scrollbar-color: rgba(255, 255, 255, 0.1) var(--bg-dark);
@@ -75,7 +73,6 @@ body {
     display: flex;
 }
 
-/* Login Screen */
 #login-screen {
     align-items: center;
     justify-content: center;
@@ -244,7 +241,6 @@ body {
     color: #7289da;
 }
 
-/* Sidebar */
 .sidebar {
     width: 260px;
     background: var(--bg-sidebar);
@@ -339,7 +335,6 @@ body {
     margin-top: 15px;
 }
 
-/* Main Content */
 .content {
     flex: 1;
     display: flex;
@@ -403,7 +398,6 @@ body {
     border-color: var(--border-hover);
 }
 
-/* Tab Content */
 .tab-content {
     display: none;
     flex: 1;
@@ -415,7 +409,6 @@ body {
     display: block;
 }
 
-/* Dashboard Grid */
 .dashboard-grid {
     display: grid;
     grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
@@ -521,7 +514,6 @@ body {
     font-family: 'JetBrains Mono', monospace;
 }
 
-/* Config Layout */
 .config-layout {
     display: grid;
     grid-template-columns: 1fr 350px;
@@ -700,7 +692,6 @@ body {
     background: rgba(239, 68, 68, 0.1);
 }
 
-/* Modals */
 .modal-overlay {
     position: fixed;
     top: 0;
@@ -814,7 +805,6 @@ body {
     color: var(--text-secondary);
 }
 
-/* Toast */
 .toast {
     position: fixed;
     bottom: 30px;
@@ -846,7 +836,6 @@ body {
     border-left: 4px solid var(--green);
 }
 
-/* Eye Toggle Buttons */
 .eye-toggle {
     position: absolute;
     right: 12px;
@@ -868,7 +857,6 @@ body {
     color: white;
 }
 
-/* Settings Tab */
 .settings-layout {
     max-width: 700px;
 }
@@ -1069,7 +1057,6 @@ body {
     color: var(--green);
 }
 
-/* Config Active Badge */
 .config-active-badge {
     display: inline-block;
     font-size: 10px;
@@ -1083,7 +1070,6 @@ body {
     margin-top: 2px;
 }
 
-/* Logout Modal - Danger Button */
 .btn-danger {
     background: var(--accent);
     color: white;
@@ -1104,7 +1090,6 @@ body {
     box-shadow: 0 6px 15px rgba(255, 58, 58, 0.3);
 }
 
-/* Delete Modal - Danger Button */
 .btn-delete-confirm {
     background: var(--red);
     color: white;
@@ -1125,7 +1110,6 @@ body {
     box-shadow: 0 6px 15px rgba(239, 68, 68, 0.3);
 }
 
-/* Balanced Button Sizing */
 .btn-modal {
     min-width: 120px;
     text-align: center;
