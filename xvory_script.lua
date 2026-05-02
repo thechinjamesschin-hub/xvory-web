@@ -2751,7 +2751,7 @@ do
             if next(targetEquipped) then
                 pcall(function() desc:SetEquippedEmotes(targetEquipped) end)
             end
-            humanoid:ApplyDescriptionClientServer(desc)
+            humanoid:ApplyDescription(desc)
             task.wait(0.15)
             if avatarConfig.Misc and avatarConfig.Misc.Headless then
                 local head = character:FindFirstChild("Head")
