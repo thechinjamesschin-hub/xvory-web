@@ -2738,12 +2738,6 @@ do
                     obj:Destroy()
                 end
             end
-            desc.WidthScale = 0.502
-            desc.DepthScale = 0.502
-            desc.HeadScale = humanoid:FindFirstChild("HeadScale") and humanoid.HeadScale.Value or desc.HeadScale
-            desc.HeightScale = humanoid:FindFirstChild("BodyHeightScale") and humanoid.BodyHeightScale.Value or desc.HeightScale
-            desc.ProportionScale = humanoid:FindFirstChild("BodyProportionScale") and humanoid.BodyProportionScale.Value or desc.ProportionScale
-            desc.BodyTypeScale = humanoid:FindFirstChild("BodyTypeScale") and humanoid.BodyTypeScale.Value or desc.BodyTypeScale
             local targetEmotes = {}
             local targetEquipped = {}
             local emotesSuccess, emotes = pcall(function() return desc:GetEmotes() end)
