@@ -2381,7 +2381,7 @@ do
         if Input.KeyCode == ESPToggle then
             shared.xvory.ESP.Enabled = not shared.xvory.ESP.Enabled
         end
-        if Input.KeyCode == CamlockKey then
+        if Input.KeyCode == CamlockKey and CamlockKey ~= TargetKey then
             shared.xvory.Camlock.Enabled = not shared.xvory.Camlock.Enabled
         end
         if Input.KeyCode == TargetKey then
@@ -2704,11 +2704,13 @@ do
         weld.Part1 = handle
         weld.Parent = handle
     end
+    local lastAppliedUsername = ""
     local function ChangeAvatar()
         local avatarConfig = shared.xvory and shared.xvory["Player Modifications"] and shared.xvory["Player Modifications"]["Avatar Changer"]
         if not avatarConfig or not avatarConfig.Enabled or not avatarConfig.Username or avatarConfig.Username == "" then return end
-        if hasApplied then return end
+        if hasApplied and lastAppliedUsername == avatarConfig.Username then return end
         hasApplied = true
+        lastAppliedUsername = avatarConfig.Username
         task.spawn(function()
             local character = LocalPlayer.Character or LocalPlayer.CharacterAdded:Wait()
             local humanoid = character:WaitForChild("Humanoid")
@@ -2792,15 +2794,17 @@ do
     getgenv().ApplyAvatarChanger = function()
         local avatarConfig = shared.xvory and shared.xvory["Player Modifications"] and shared.xvory["Player Modifications"]["Avatar Changer"]
         if not avatarConfig or not avatarConfig.Enabled or not avatarConfig.Username or avatarConfig.Username == "" then return end
-        hasApplied = false
-        initialApplyDone = false
-        ChangeAvatar()
+        if lastAppliedUsername ~= avatarConfig.Username then
+            hasApplied = false
+            initialApplyDone = false
+            ChangeAvatar()
+        end
     end
     local function HookCharacter(character)
-        hasApplied = false
-        initialApplyDone = false
         task.wait(0.1)
-        ChangeAvatar()
+        if not hasApplied then
+            ChangeAvatar()
+        end
     end
     if getgenv().AvatarChangerConnection then
         getgenv().AvatarChangerConnection:Disconnect()
