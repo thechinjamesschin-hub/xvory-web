@@ -83,6 +83,19 @@ function loadData() {
         activeConfigId = null;
         users = [];
     }
+    
+    // Seed default config if empty to prevent script crashes on Railway deploys
+    if (configs.length === 0) {
+        const defaultConfig = {
+            id: 'default-' + Date.now(),
+            name: 'Default Config',
+            script: `shared.xvory = {\n    ["Settings"] = {\n        ["Method"] = "Web",\n        ["General"] = {\n            ["Keybind"] = {\n                ["Target"] = "Q",\n                ["Camlock"] = "C",\n                ["2Tap"] = "V",\n                ["Triggerbot"] = "T",\n                ["Inventory Sorter"] = "N",\n                ["ESP"] = "B"\n            }\n        }\n    },\n    ["Silent"] = { ["Enabled"] = true, ["Mode"] = "Target", ["Max Dist"] = 250, ["Hit Part"] = "Closest Point", ["Closest Point"] = { ["Mode"] = "Advanced", ["Scale"] = 0.2 }, ["Prediction"] = { ["Enabled"] = true, ["Mode"] = "Regular", ["x"] = 0, ["y"] = 0, ["z"] = 0 }, ["Client Mode"] = { ["Enabled"] = false, ["weapons"] = { "[Revolver]", "[Silencer]", "[Glock]" } }, ["Fov"] = { ["Enabled"] = true, ["Visible"] = false, ["Circle"] = 45, ["Hit Scan"] = 45, ["Weapon Configuration"] = { ["Enabled"] = true, ["Shotguns"] = { circle = 60 }, ["Pistol"] = { circle = 50 }, ["Others"] = { circle = 45 } } }, ["Conditions"] = { ["Visible"] = false, ["Grabbed"] = true, ["knocked"] = true, ["Self Knocked"] = false, ["Chat"] = true } },\n    ["Camlock"] = { ["Enabled"] = false, ["HitPart"] = "Head", ["Closest Point"] = { ["Mode"] = "Advanced", ["Scale"] = 0.15 }, ["Sticky"] = 0.55, ["EasingMode"] = "Circular", ["EasingDirection"] = "Out", ["Pred"] = { ["Enabled"] = true, ["X"] = 0.06, ["Y"] = 0.04, ["Z"] = 0.06 }, ["Fov"] = { ["Enabled"] = true, ["Visible"] = false, ["Size"] = 90 }, ["Conditions"] = { ["Visible"] = true, ["Grabbed"] = true, ["knocked"] = true, ["Self Knocked"] = false, ["Chat"] = true } },\n    ["Triggerbot"] = { ["Enabled"] = true, ["Mode"] = "Target", ["Max Dist"] = 200, ["Radius"] = 12, ["Cooldown"] = 0.12, ["Works"] = { ["Mode"] = "Keybind", ["Type"] = "Hold" }, ["Prediction"] = { ["Enabled"] = false, ["Value"] = 0 }, ["Fov"] = { ["Visible"] = false, ["X"] = 3.5, ["Y"] = 6, ["Z"] = 3.5, ["Scale"] = 1.2 }, ["Conditions"] = { ["Visible"] = false, ["Grabbed"] = true, ["knocked"] = true, ["Self Knocked"] = false, ["Chat"] = true } },\n    ["Weapon"] = { ["2Tap"] = { ["Enabled"] = false, ["Weapons"] = { "[Revolver]", "[Silencer]" } }, ["Bullet Spread"] = { ["Enabled"] = false, ["Value"] = 0.0, ["Randomizer"] = { ["Enabled"] = true, ["Value"] = 0.0 } }, ["Delays Changer"] = { ["Enabled"] = false, ["[Revolver]"] = 0.00, ["[Double-Barrel SG]"] = 0.40, ["[TacticalShotgun]"] = 0.30, ["Others"] = 2.3 } },\n    ["Player Modifications"] = { ["Anti Fall"] = true, ["Avatar Changer"] = { ["Enabled"] = false, ["Username"] = "4l24l", ["Misc"] = { ["Headless"] = false, ["Korblox"] = true } } },\n    ["Local Game"] = { ["Inventory Sorter"] = { ["Enabled"] = false, ["Order"] = { "[Double-Barrel SG]", "[Revolver]", "[TacticalShotgun]", "[Knife]" } } },\n    ["ESP"] = { ["Enabled"] = true, ["Color"] = Color3.fromRGB(255, 255, 255), ["TargetColor"] = Color3.fromRGB(0, 255, 0), ["UseDisplayName"] = true, ["Position"] = "Bottom", ["Size"] = 14 }\n}`
+        };
+        configs.push(defaultConfig);
+        activeConfigId = defaultConfig.id;
+        saveData();
+        console.log('Seeded default active config');
+    }
 }
 
 function saveData() {
