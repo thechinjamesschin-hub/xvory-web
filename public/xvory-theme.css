@@ -1,143 +1,142 @@
-/* Xvory CodeMirror Theme - Match Image Style */
+/* Xvory CodeMirror Theme — Modern & Clean */
 .cm-s-xvory.CodeMirror {
     background: #0a0a0c;
-    color: #ffffff;
+    color: #c8ccd4;
 }
 
 .cm-s-xvory div.CodeMirror-selected {
-    background: rgba(255, 255, 255, 0.1);
+    background: rgba(255, 255, 255, 0.07);
 }
 
 .cm-s-xvory .CodeMirror-line::selection,
 .cm-s-xvory .CodeMirror-line>span::selection,
 .cm-s-xvory .CodeMirror-line>span>span::selection {
-    background: rgba(255, 255, 255, 0.1);
+    background: rgba(255, 255, 255, 0.07);
 }
 
 .cm-s-xvory .CodeMirror-gutters {
     background: #0a0a0c;
-    border-right: 1px solid rgba(255, 255, 255, 0.05);
+    border-right: 1px solid rgba(255, 255, 255, 0.04);
 }
 
 .cm-s-xvory .CodeMirror-linenumber {
-    color: #3e3e42;
+    color: #3a3f4b;
     padding-left: 10px;
     padding-right: 10px;
 }
 
 .cm-s-xvory .CodeMirror-cursor {
-    border-left: 2px solid #ffffff;
+    border-left: 2px solid #fff;
 }
 
 .cm-s-xvory .CodeMirror-activeline-background {
-    background: rgba(255, 255, 255, 0.02);
+    background: rgba(255, 255, 255, 0.025);
 }
 
-/* Syntax Highlighting based on image */
+/* Keywords — Soft coral/red */
 .cm-s-xvory span.cm-keyword {
-    color: #bd93f9;
+    color: #e06c75;
 }
 
-/* true/false - Purple */
+/* Booleans, nil — Warm orange */
 .cm-s-xvory span.cm-atom {
-    color: #bd93f9;
+    color: #d19a66;
 }
 
+/* Numbers — Warm orange */
 .cm-s-xvory span.cm-number {
-    color: #ff79c6;
+    color: #d19a66;
 }
 
-/* Numbers - Pink/Red */
+/* Function definitions — Soft blue */
 .cm-s-xvory span.cm-def {
-    color: #8be9fd;
+    color: #61afef;
 }
 
-/* Function Defs - Cyan */
+/* Variables — Clean light grey */
 .cm-s-xvory span.cm-variable {
-    color: #ffffff;
+    color: #c8ccd4;
 }
 
 .cm-s-xvory span.cm-variable-2 {
-    color: #8be9fd;
+    color: #e5c07b;
 }
 
 .cm-s-xvory span.cm-variable-3 {
-    color: #8be9fd;
+    color: #61afef;
 }
 
+/* Properties — Soft gold */
 .cm-s-xvory span.cm-property {
-    color: #8be9fd;
+    color: #e5c07b;
 }
 
-/* Property names - Cyan */
+/* Operators — Subtle white */
 .cm-s-xvory span.cm-operator {
-    color: #ffffff;
+    color: #9da5b4;
 }
 
-/* Operators - White */
+/* Comments — Muted grey, italic */
 .cm-s-xvory span.cm-comment {
-    color: #6272a4;
+    color: #5c6370;
     font-style: italic;
 }
 
-/* Comments - GreyBlue */
+/* Strings — Soft green */
 .cm-s-xvory span.cm-string {
-    color: #8be9fd;
+    color: #98c379;
 }
 
-/* Strings - Cyan (per image keys) */
 .cm-s-xvory span.cm-string-2 {
-    color: #8be9fd;
+    color: #98c379;
 }
 
+/* Meta — Coral */
 .cm-s-xvory span.cm-meta {
-    color: #ff79c6;
+    color: #e06c75;
 }
 
 .cm-s-xvory span.cm-qualifier {
-    color: #50fa7b;
+    color: #98c379;
 }
 
+/* Builtins — Soft blue */
 .cm-s-xvory span.cm-builtin {
-    color: #8be9fd;
+    color: #61afef;
 }
 
+/* Brackets — Muted white */
 .cm-s-xvory span.cm-bracket {
-    color: #ffffff;
+    color: #9da5b4;
 }
 
-/* Brackets - White */
 .cm-s-xvory span.cm-tag {
-    color: #ff79c6;
+    color: #e06c75;
 }
 
 .cm-s-xvory span.cm-attribute {
-    color: #50fa7b;
+    color: #d19a66;
 }
 
 .cm-s-xvory span.cm-header {
-    color: #bd93f9;
+    color: #e06c75;
 }
 
 .cm-s-xvory span.cm-quote {
-    color: #8be9fd;
+    color: #98c379;
 }
 
 .cm-s-xvory span.cm-link {
-    color: #bd93f9;
+    color: #61afef;
 }
 
 .cm-s-xvory span.cm-special {
-    color: #ff79c6;
+    color: #c678dd;
 }
 
-/* Match Brackets */
+/* Matching brackets */
 .cm-s-xvory .CodeMirror-matchingbracket {
-    border-bottom: 1px solid #ff79c6;
-    color: white !important;
-}
-
-.CodeMirror-matchingbracket {
-    background-color: rgba(255, 255, 255, 0.1);
+    border-bottom: 1px solid #61afef;
     color: #fff !important;
+    background: rgba(97, 175, 239, 0.1);
 }

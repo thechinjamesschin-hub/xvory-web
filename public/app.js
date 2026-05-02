@@ -1,3 +1,14 @@
+
+const SecureStore = {
+    set: (k, v) => localStorage.setItem(k, btoa(encodeURIComponent(JSON.stringify(v)))),
+    get: (k) => {
+        try {
+            const v = localStorage.getItem(k);
+            return v ? JSON.parse(decodeURIComponent(atob(v))) : null;
+        } catch (e) { return null; }
+    },
+    remove: (k) => localStorage.removeItem(k)
+};
 window.turnstileLoginId = null;
 window.turnstileRegisterId = null;
 
@@ -8,13 +19,12 @@ window.onloadTurnstileCallback = function () {
 };
 
 document.addEventListener('DOMContentLoaded', () => {
-    // --- State ---
+
     let savedConfigs = [];
     let activeConfigId = null;
     let editor = null;
     let editingConfigId = null;
 
-    // --- DOM Elements ---
     const loginScreen = document.getElementById('login-screen');
     const dashboardScreen = document.getElementById('dashboard-screen');
 
@@ -54,7 +64,6 @@ document.addEventListener('DOMContentLoaded', () => {
     const editorStatus = document.getElementById('editor-status');
     const clearEditorBtn = document.getElementById('clear-editor-btn');
 
-    // Modals
     const setActiveBtn = document.getElementById('set-active-btn') || document.getElementById('global-set-btn');
     const setActiveModal = document.getElementById('set-active-modal');
     const activeModalClose = document.getElementById('active-modal-close');
@@ -76,7 +85,200 @@ document.addEventListener('DOMContentLoaded', () => {
 
     let selectedConfigToActive = null;
 
-    // --- Toast Notification ---
+    const userProfileBtn = document.getElementById('user-profile-btn');
+    const profileImg = document.getElementById('profile-img');
+    const settingsPfpPreview = document.getElementById('settings-pfp-preview');
+    const settingsPfpUrl = document.getElementById('settings-pfp-url');
+    const savePfpBtn = document.getElementById('save-pfp-btn');
+    const pfpMsg = document.getElementById('pfp-msg');
+
+    const settingsNewUsername = document.getElementById('settings-new-username');
+    const settingsUsernamePassword = document.getElementById('settings-username-password');
+    const saveUsernameBtn = document.getElementById('save-username-btn');
+    const usernameMsg = document.getElementById('username-msg');
+    const usernameCooldownHint = document.getElementById('username-cooldown-hint');
+
+    const settingsCurrentPw = document.getElementById('settings-current-pw');
+    const settingsNewPw = document.getElementById('settings-new-pw');
+    const settingsConfirmPw = document.getElementById('settings-confirm-pw');
+    const savePasswordBtn = document.getElementById('save-password-btn');
+    const passwordMsg = document.getElementById('password-msg');
+
+    if (userProfileBtn) {
+        userProfileBtn.addEventListener('click', () => {
+            const settingsNav = document.getElementById('nav-settings');
+            if (settingsNav) settingsNav.click();
+        });
+    }
+
+    const pfpUploadWrapper = document.getElementById('pfp-upload-wrapper');
+    const pfpFileInput = document.getElementById('pfp-file-input');
+
+    if (pfpUploadWrapper && pfpFileInput) {
+        pfpUploadWrapper.addEventListener('click', () => {
+            pfpFileInput.click();
+        });
+
+        pfpFileInput.addEventListener('change', (e) => {
+            const file = e.target.files[0];
+            if (!file) return;
+
+            if (!file.type.startsWith('image/')) {
+                showToast('Please select an image file', 'error');
+                return;
+            }
+
+            if (file.size > 2 * 1024 * 1024) {
+                showToast('Image must be under 2MB', 'error');
+                return;
+            }
+
+            const reader = new FileReader();
+            reader.onload = (ev) => {
+                const base64 = ev.target.result;
+                if (settingsPfpPreview) settingsPfpPreview.src = base64;
+                if (settingsPfpUrl) settingsPfpUrl.value = base64;
+            };
+            reader.readAsDataURL(file);
+        });
+    }
+
+    if (settingsPfpUrl) {
+        settingsPfpUrl.addEventListener('input', () => {
+            const url = settingsPfpUrl.value.trim();
+            if (url && settingsPfpPreview) settingsPfpPreview.src = url;
+        });
+    }
+
+    if (savePfpBtn) {
+        savePfpBtn.addEventListener('click', () => {
+            const auth = SecureStore.get('xvory-session');
+            if (!auth) return;
+            const newPfp = settingsPfpUrl ? settingsPfpUrl.value.trim() : '';
+
+            savePfpBtn.disabled = true;
+            savePfpBtn.querySelector('span').textContent = 'Saving...';
+
+            fetch('/api/settings', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ username: auth.username, token: auth.token, pfp: newPfp })
+            })
+                .then(r => r.json())
+                .then(data => {
+                    savePfpBtn.disabled = false;
+                    savePfpBtn.querySelector('span').textContent = 'Save Avatar';
+                    if (data.success) {
+                        if (pfpMsg) { pfpMsg.textContent = 'Avatar saved!'; pfpMsg.className = 'settings-msg success'; }
+                        if (profileImg) profileImg.src = data.user.pfp || `https://ui-avatars.com/api/?name=${data.user.username}&background=random`;
+                        showToast('Avatar updated!');
+                    } else {
+                        if (pfpMsg) { pfpMsg.textContent = data.message; pfpMsg.className = 'settings-msg error'; }
+                    }
+                })
+                .catch(() => {
+                    savePfpBtn.disabled = false;
+                    savePfpBtn.querySelector('span').textContent = 'Save Avatar';
+                    if (pfpMsg) { pfpMsg.textContent = 'Connection error'; pfpMsg.className = 'settings-msg error'; }
+                });
+        });
+    }
+
+    if (saveUsernameBtn) {
+        saveUsernameBtn.addEventListener('click', () => {
+            const auth = SecureStore.get('xvory-session');
+            if (!auth) return;
+            const newUser = settingsNewUsername ? settingsNewUsername.value.trim() : '';
+            const pw = settingsUsernamePassword ? settingsUsernamePassword.value : '';
+
+            if (!newUser || !pw) {
+                if (usernameMsg) { usernameMsg.textContent = 'Please fill all fields'; usernameMsg.className = 'settings-msg error'; }
+                return;
+            }
+
+            saveUsernameBtn.disabled = true;
+            saveUsernameBtn.querySelector('span').textContent = 'Updating...';
+
+            fetch('/api/change-username', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ username: auth.username, password: pw, newUsername: newUser })
+            })
+                .then(r => r.json())
+                .then(data => {
+                    saveUsernameBtn.disabled = false;
+                    saveUsernameBtn.querySelector('span').textContent = 'Update Username';
+                    if (data.success) {
+                        if (usernameMsg) { usernameMsg.textContent = data.message; usernameMsg.className = 'settings-msg success'; }
+                        auth.username = data.user.username;
+                        SecureStore.set('xvory-auth', auth);
+                        const accountUsername = document.getElementById('account-username');
+                        if (accountUsername) accountUsername.textContent = data.user.username;
+                        if (settingsNewUsername) settingsNewUsername.value = '';
+                        if (settingsUsernamePassword) settingsUsernamePassword.value = '';
+                        showToast('Username changed!');
+                    } else {
+                        if (usernameMsg) { usernameMsg.textContent = data.message; usernameMsg.className = 'settings-msg error'; }
+                    }
+                })
+                .catch(() => {
+                    saveUsernameBtn.disabled = false;
+                    saveUsernameBtn.querySelector('span').textContent = 'Update Username';
+                    if (usernameMsg) { usernameMsg.textContent = 'Connection error'; usernameMsg.className = 'settings-msg error'; }
+                });
+        });
+    }
+
+    if (savePasswordBtn) {
+        savePasswordBtn.addEventListener('click', () => {
+            const auth = SecureStore.get('xvory-session');
+            if (!auth) return;
+            const currentPw = settingsCurrentPw ? settingsCurrentPw.value : '';
+            const newPw = settingsNewPw ? settingsNewPw.value : '';
+            const confirmPw = settingsConfirmPw ? settingsConfirmPw.value : '';
+
+            if (!currentPw || !newPw || !confirmPw) {
+                if (passwordMsg) { passwordMsg.textContent = 'Please fill all fields'; passwordMsg.className = 'settings-msg error'; }
+                return;
+            }
+
+            if (newPw !== confirmPw) {
+                if (passwordMsg) { passwordMsg.textContent = 'New passwords do not match'; passwordMsg.className = 'settings-msg error'; }
+                return;
+            }
+
+            savePasswordBtn.disabled = true;
+            savePasswordBtn.querySelector('span').textContent = 'Updating...';
+
+            fetch('/api/change-password', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ username: auth.username, currentPassword: currentPw, newPassword: newPw, confirmPassword: confirmPw })
+            })
+                .then(r => r.json())
+                .then(data => {
+                    savePasswordBtn.disabled = false;
+                    savePasswordBtn.querySelector('span').textContent = 'Update Password';
+                    if (data.success) {
+                        if (passwordMsg) { passwordMsg.textContent = data.message; passwordMsg.className = 'settings-msg success'; }
+                        auth.password = newPw;
+                        SecureStore.set('xvory-auth', auth);
+                        if (settingsCurrentPw) settingsCurrentPw.value = '';
+                        if (settingsNewPw) settingsNewPw.value = '';
+                        if (settingsConfirmPw) settingsConfirmPw.value = '';
+                        showToast('Password changed!');
+                    } else {
+                        if (passwordMsg) { passwordMsg.textContent = data.message; passwordMsg.className = 'settings-msg error'; }
+                    }
+                })
+                .catch(() => {
+                    savePasswordBtn.disabled = false;
+                    savePasswordBtn.querySelector('span').textContent = 'Update Password';
+                    if (passwordMsg) { passwordMsg.textContent = 'Connection error'; passwordMsg.className = 'settings-msg error'; }
+                });
+        });
+    }
+
     function showToast(message, type = 'success') {
         const toast = document.getElementById('toast');
         toast.textContent = message;
@@ -84,7 +286,6 @@ document.addEventListener('DOMContentLoaded', () => {
         setTimeout(() => { toast.classList.remove('show'); }, 3000);
     }
 
-    // --- Key Masking ---
     function maskKey(key) {
         if (!key || key.length <= 4) return '••••••••';
         const visibleStart = Math.min(3, Math.floor(key.length / 4));
@@ -93,7 +294,6 @@ document.addEventListener('DOMContentLoaded', () => {
         return key.substring(0, visibleStart) + '•'.repeat(maskedLength) + key.substring(key.length - visibleEnd);
     }
 
-    // --- Editor ---
     function initEditor() {
         if (!editor) {
             const editorEl = document.getElementById('lua-editor');
@@ -111,14 +311,23 @@ document.addEventListener('DOMContentLoaded', () => {
                 styleActiveLine: true
             });
 
-            const savedSession = localStorage.getItem('xvory-editor-session');
+            const savedSession = SecureStore.get('xvory-editor-session');
             if (savedSession) {
                 editor.setValue(savedSession);
             }
 
+            let autoUpdateTimer = null;
             editor.on('change', () => {
                 updateEditorStatus();
-                localStorage.setItem('xvory-editor-session', editor.getValue());
+                SecureStore.set('xvory-editor-session', editor.getValue());
+
+                const autoUpdateCb = document.getElementById('auto-update-cb');
+                if (autoUpdateCb && autoUpdateCb.checked && editingConfigId) {
+                    clearTimeout(autoUpdateTimer);
+                    autoUpdateTimer = setTimeout(() => {
+                        updateConfig(editingConfigId, null, editor.getValue(), true);
+                    }, 800);
+                }
             });
             updateEditorStatus();
         }
@@ -140,7 +349,6 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     }
 
-    // --- API ---
     function fetchConfigs() {
         fetch('/api/configs')
             .then(res => res.json())
@@ -169,8 +377,7 @@ document.addEventListener('DOMContentLoaded', () => {
         if (configBadge) configBadge.textContent = savedConfigs.length;
     }
 
-    // --- Login / Register ---
-    const savedAuth = localStorage.getItem('xvory-auth');
+    const savedAuth = SecureStore.get('xvory-auth');
     if (savedAuth) {
         try {
             const auth = JSON.parse(savedAuth);
@@ -197,6 +404,14 @@ document.addEventListener('DOMContentLoaded', () => {
             document.getElementById('form-login').style.display = 'none';
             document.getElementById('form-register').style.display = 'none';
             document.getElementById(tab.dataset.target).style.display = 'block';
+
+            if (window.turnstile) {
+                if (tab.dataset.target === 'form-register' && window.turnstileRegisterId !== null) {
+                    window.turnstile.reset(window.turnstileRegisterId);
+                } else if (tab.dataset.target === 'form-login' && window.turnstileLoginId !== null) {
+                    window.turnstile.reset(window.turnstileLoginId);
+                }
+            }
         });
     });
 
@@ -205,14 +420,14 @@ document.addEventListener('DOMContentLoaded', () => {
         const password = loginPassword.value.trim();
 
         const turnstileElement = document.querySelector('#form-login [name="cf-turnstile-response"]');
-        const turnstileToken = turnstileElement ? turnstileElement.value : '';
+        const cfToken = turnstileElement ? turnstileElement.value : '';
 
         if (!username || !password) {
             loginError.textContent = "Please enter username and password";
             return;
         }
 
-        if (!turnstileToken) {
+        if (!cfToken) {
             loginError.textContent = "Please complete the Cloudflare verification";
             return;
         }
@@ -223,7 +438,7 @@ document.addEventListener('DOMContentLoaded', () => {
         fetch('/api/login', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ username, password, cfToken: turnstileToken })
+            body: JSON.stringify({ username, password, cfToken })
         })
             .then(res => res.json())
             .then(data => {
@@ -234,8 +449,14 @@ document.addEventListener('DOMContentLoaded', () => {
                     const accountUsername = document.getElementById('account-username');
                     if (accountUsername) accountUsername.textContent = username;
 
+                    if (profileImg) {
+                        const pfpSrc = data.user.pfp || `https://ui-avatars.com/api/?name=${username}&background=random`;
+                        profileImg.src = pfpSrc;
+                        if (settingsPfpPreview) settingsPfpPreview.src = pfpSrc;
+                    }
+
                     if (maskedKey) {
-                        maskedKey.dataset.key = 'HIDDEN';
+                        maskedKey.dataset.key = data.user.license || 'HIDDEN';
                         maskedKey.textContent = '••••••••';
                     }
 
@@ -255,10 +476,10 @@ document.addEventListener('DOMContentLoaded', () => {
                     initEditor();
                     fetchConfigs();
 
-                    if (staySignedIn.checked) {
-                        localStorage.setItem('xvory-auth', JSON.stringify({ username, password }));
+                    if (!staySignedIn || staySignedIn.checked) {
+                        SecureStore.set('xvory-auth', { username, password });
                     } else {
-                        localStorage.removeItem('xvory-auth');
+                        SecureStore.remove('xvory-session');
                     }
 
                     showToast('Authenticated successfully');
@@ -290,8 +511,14 @@ document.addEventListener('DOMContentLoaded', () => {
                     const accountUsername = document.getElementById('account-username');
                     if (accountUsername) accountUsername.textContent = username;
 
+                    if (profileImg) {
+                        const pfpSrc = data.user.pfp || `https://ui-avatars.com/api/?name=${username}&background=random`;
+                        profileImg.src = pfpSrc;
+                        if (settingsPfpPreview) settingsPfpPreview.src = pfpSrc;
+                    }
+
                     if (maskedKey) {
-                        maskedKey.dataset.key = 'HIDDEN';
+                        maskedKey.dataset.key = data.user.license || 'HIDDEN';
                         maskedKey.textContent = '••••••••';
                     }
 
@@ -312,7 +539,7 @@ document.addEventListener('DOMContentLoaded', () => {
                     fetchConfigs();
                     showToast('Welcome back, ' + username);
                 } else {
-                    localStorage.removeItem('xvory-auth');
+                    SecureStore.remove('xvory-session');
                     loginScreen.classList.add('active');
                 }
             })
@@ -327,14 +554,14 @@ document.addEventListener('DOMContentLoaded', () => {
         const license = regLicense.value.trim();
 
         const turnstileElement = document.querySelector('#form-register [name="cf-turnstile-response"]');
-        const turnstileToken = turnstileElement ? turnstileElement.value : '';
+        const cfToken = turnstileElement ? turnstileElement.value : '';
 
         if (!username || !password || !license) {
             registerError.textContent = "Please fill all fields";
             return;
         }
 
-        if (!turnstileToken) {
+        if (!cfToken) {
             registerError.textContent = "Please complete the Cloudflare verification";
             return;
         }
@@ -345,7 +572,7 @@ document.addEventListener('DOMContentLoaded', () => {
         fetch('/api/register', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ username, password, license, cfToken: turnstileToken })
+            body: JSON.stringify({ username, password, license, cfToken })
         })
             .then(res => res.json())
             .then(data => {
@@ -377,7 +604,6 @@ document.addEventListener('DOMContentLoaded', () => {
     if (registerBtn) registerBtn.addEventListener('click', doRegister);
     if (regLicense) regLicense.addEventListener('keydown', (e) => { if (e.key === 'Enter') doRegister(); });
 
-    // --- Navigation ---
     tabs.forEach(tab => {
         tab.addEventListener('click', () => {
             tabs.forEach(t => t.classList.remove('active'));
@@ -385,7 +611,7 @@ document.addEventListener('DOMContentLoaded', () => {
             tab.classList.add('active');
             const target = tab.dataset.tab;
             document.getElementById(`tab-${target}`).classList.add('active');
-            pageTitle.textContent = target === 'dashboard' ? 'Dashboard' : 'Config Editor';
+            pageTitle.textContent = target === 'dashboard' ? 'Dashboard' : target === 'config' ? 'Config Editor' : 'Settings';
             if (target === 'config' && editor) setTimeout(() => editor.refresh(), 10);
         });
     });
@@ -412,7 +638,6 @@ document.addEventListener('DOMContentLoaded', () => {
         });
     }
 
-    // --- Modals ---
     if (setActiveBtn) {
         setActiveBtn.addEventListener('click', () => {
             setActiveModal.classList.add('active');
@@ -430,6 +655,11 @@ document.addEventListener('DOMContentLoaded', () => {
     if (activeModalConfirm) {
         activeModalConfirm.addEventListener('click', () => {
             if (selectedConfigToActive) {
+                if (selectedConfigToActive === activeConfigId) {
+                    showToast('This config is already active', 'error');
+                    closeActiveModal();
+                    return;
+                }
                 setActiveConfig(selectedConfigToActive);
                 closeActiveModal();
             } else {
@@ -493,7 +723,6 @@ document.addEventListener('DOMContentLoaded', () => {
             });
     }
 
-    // Logout Modal
     if (logoutBtn) {
         logoutBtn.onclick = () => {
             logoutModal.classList.add('active');
@@ -504,12 +733,11 @@ document.addEventListener('DOMContentLoaded', () => {
     if (logoutModalClose) logoutModalClose.onclick = () => logoutModal.classList.remove('active');
     if (logoutModalConfirm) {
         logoutModalConfirm.onclick = () => {
-            localStorage.removeItem('xvory-auth');
+            SecureStore.remove('xvory-session');
             window.location.reload();
         };
     }
 
-    // Delete Config
     function openDeleteModal(config) {
         configToDelete = config;
         deleteConfigName.textContent = config.name;
@@ -586,6 +814,7 @@ document.addEventListener('DOMContentLoaded', () => {
             el.innerHTML = `
                 <div class="config-info">
                     <div class="name">${config.name}</div>
+                    ${activeConfigId === config.id ? '<span class="config-active-badge">Active</span>' : ''}
                 </div>
                 <div class="config-actions">
                     <button class="btn-action edit-btn" title="Edit">
@@ -612,7 +841,7 @@ document.addEventListener('DOMContentLoaded', () => {
         });
     }
 
-    function updateConfig(id, name, script) {
+    function updateConfig(id, name, script, silent = false) {
         fetch(`/api/configs/${id}`, {
             method: 'PUT',
             headers: { 'Content-Type': 'application/json' },
@@ -625,7 +854,7 @@ document.addEventListener('DOMContentLoaded', () => {
                     savedConfigs[idx] = data.config;
                     updateEditorStatus();
                     renderConfigs();
-                    showToast('Updated successfully');
+                    if (!silent) showToast('Updated successfully');
                 }
             });
     }
@@ -640,7 +869,6 @@ document.addEventListener('DOMContentLoaded', () => {
         });
     }
 
-    // --- Eye Toggle for Password/License fields ---
     document.querySelectorAll('.eye-toggle').forEach(btn => {
         btn.addEventListener('click', () => {
             const targetId = btn.dataset.target;

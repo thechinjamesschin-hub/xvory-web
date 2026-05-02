@@ -53,7 +53,7 @@ shared.xvory = {
         }
     },
     ["Camlock"] = {
-        ["Enabled"] = true,
+        ["Enabled"] = false,
         ["HitPart"] = "Head",
         ["Closest Point"] = {
             ["Mode"] = "Advanced",
@@ -171,10 +171,15 @@ shared.xvory = {
 if not LPH_NO_VIRTUALIZE then LPH_NO_VIRTUALIZE = function(f) return f end end
 if not LPH_OBFUSCATED then LPH_OBFUSCATED = false end
 if not LPH_ENCSTR then LPH_ENCSTR = function(s) return s end end
-
 local plrs = game:FindFirstChildOfClass("Players")
 local plr = plrs and plrs.LocalPlayer
 
+if getgenv().XvoryConnections then
+    for _, conn in ipairs(getgenv().XvoryConnections) do
+        pcall(function() conn:Disconnect() end)
+    end
+end
+getgenv().XvoryConnections = {}
 local function ApplyGunDelay(tool)
     if not tool then return end
     local delaysConfig = shared.xvory.Weapon["Delays Changer"]
@@ -193,7 +198,6 @@ local function ApplyGunDelay(tool)
         tool:SetAttribute("Cooldown", newDelay)
     end
 end
-
 local function ApplyToAllTools()
     if plr and plr.Character then
         for _, tool in ipairs(plr.Character:GetChildren()) do
@@ -206,9 +210,7 @@ local function ApplyToAllTools()
         end
     end
 end
-
 local currentCharacterConnection = nil
-
 local function SetupCharacter(character)
     if currentCharacterConnection then
         currentCharacterConnection:Disconnect()
@@ -220,21 +222,18 @@ local function SetupCharacter(character)
     currentCharacterConnection = character.ChildAdded:Connect(function(child)
         if child:IsA("Tool") then ApplyGunDelay(child) end
     end)
+    table.insert(getgenv().XvoryConnections, currentCharacterConnection)
 end
-
 if plr and plr.Character then
     SetupCharacter(plr.Character)
 end
-
-plr.CharacterAdded:Connect(function(newCharacter)
+local charConn = plr.CharacterAdded:Connect(function(newCharacter)
     SetupCharacter(newCharacter)
     ApplyToAllTools()
 end)
-
+table.insert(getgenv().XvoryConnections, charConn)
 getgenv().ApplyGunDelays = ApplyToAllTools
 ApplyToAllTools()
-
-
 local Players = game:GetService("Players")
 local UserInputService = game:GetService("UserInputService")
 local RunService = game:GetService("RunService")
@@ -263,11 +262,9 @@ local Velocity_Data = {
         V_B = nil
     }
 }
-
 local function getTime()
     return os.date("%H:%M:%S")
 end
-
 local function progressBar(current, total, width)
     width = width or 20
     local filled = math.floor((current / total) * width)
@@ -275,21 +272,13 @@ local function progressBar(current, total, width)
     local percent = math.floor((current / total) * 100)
     return string.format("[%s] (%d%%)", bar, percent)
 end
-
 local function atomicLog(message)
-    print(string.format("%s -- [xvory]: %s", getTime(), message))
+    print(string.format("[%s] [INFO] %s", getTime(), message))
 end
-
 local function atomicError(taskLabel, err)
-    print(string.format("%s -- [xvory]: [   FAILED   ] - Error in '%s'", getTime(), taskLabel))
-    print(string.format("%s -- [xvory]: ┌─────────────────────────────────────────", getTime()))
-    print(string.format("%s -- [xvory]: │ Task    : %s", getTime(), taskLabel))
-    print(string.format("%s -- [xvory]: │ Reason  : %s", getTime(), tostring(err)))
-    print(string.format("%s -- [xvory]: │ Time    : %s", getTime(), os.date("%Y-%m-%d %H:%M:%S")))
-    print(string.format("%s -- [xvory]: └─────────────────────────────────────────", getTime()))
-    print(string.format("%s -- [xvory]: Aborting initialization.", getTime()))
+    print(string.format("[%s] [ERROR] Task failed: %s", getTime(), taskLabel))
+    print(string.format("[%s] [ERROR] Details: %s", getTime(), tostring(err)))
 end
-
 local tasks = {
     {
         label = "Loading config...",
@@ -331,45 +320,35 @@ local tasks = {
         end
     },
 }
-
 local total = #tasks
 local startTime = os.clock()
 local results = {}
 local failed = false
-
 atomicLog("Initializing...")
-
 for i, t in ipairs(tasks) do
     atomicLog(string.format("%s -  - %s", progressBar(i - 1, total), t.label))
-
     local ok, err = pcall(function()
         results[t.label] = t.run()
     end)
-
     if not ok then
         atomicError(t.label, err)
         failed = true
         break
     end
 end
-
 if not failed then
     local elapsed = os.clock() - startTime
     atomicLog(string.format("[xvory]: [SUCCESS] - Authenticated in %.12fs", elapsed))
 end
-
 local BASE_URL = "https://test-production-8fbf.up.railway.app"
-
 local function extractConfigTable(source)
     local marker = source:find("shared%.xvory%s*=%s*{")
     if not marker then
         marker = source:find("local%s+DEFAULT_CONFIG%s*=%s*{")
     end
     if not marker then return nil end
-    
     local braceStart = source:find("{", marker)
     if not braceStart then return nil end
-    
     local depth = 0
     for i = braceStart, #source do
         local c = source:sub(i, i)
@@ -377,18 +356,40 @@ local function extractConfigTable(source)
         if c == "}" then
             depth = depth - 1
             if depth == 0 then
-                return "shared.xvory = " .. source:sub(braceStart, i)
+                return source:sub(braceStart, i)
             end
         end
     end
     return nil
 end
 
+local function parseWebConfig(tableStr)
+    local code = "local Color3 = Color3; local Enum = Enum; local Vector3 = Vector3; return " .. tableStr
+    local fn, err = loadstring(code)
+    if not fn then return nil end
+    local ok, result = pcall(fn)
+    if ok and type(result) == "table" then return result end
+    return nil
+end
+
+local function deepMerge(target, source)
+    for k, v in pairs(source) do
+        if type(v) == "table" and type(target[k]) == "table" then
+            deepMerge(target[k], v)
+        else
+            target[k] = v
+        end
+    end
+end
+
 local function runXvory()
     local method = (shared.xvory and shared.xvory.Settings and shared.xvory.Settings.Method) or "Table"
-    
     if method ~= "Web" and method ~= "Website" and method ~= "Cloud-Web" and method ~= "Cloud-Website" and method ~= "Cloud Website" then
         return true
+    end
+
+    if not game:IsLoaded() then
+        game.Loaded:Wait()
     end
 
     local function fetchAndApply()
@@ -397,13 +398,11 @@ local function runXvory()
         if not raw or raw == "" or raw:find("No active configuration") then
             error("No Config Were Selected on the website config")
         end
-        local configCode = extractConfigTable(raw)
-        if not configCode then error("could not find config table in web config") end
-        local loadFunc, loadErr = loadstring(configCode)
-        if not loadFunc then error("config parse error: " .. tostring(loadErr)) end
-        local env = getfenv(0)
-        if setfenv then pcall(setfenv, loadFunc, env) end
-        loadFunc()
+        local tableStr = extractConfigTable(raw)
+        if not tableStr then error("could not find config table in web config") end
+        local newConfig = parseWebConfig(tableStr)
+        if not newConfig then error("config parse failed") end
+        deepMerge(shared.xvory, newConfig)
         shared.xvory.Settings = shared.xvory.Settings or {}
         shared.xvory.Settings.Method = "Web"
         return raw
@@ -418,24 +417,19 @@ local function runXvory()
     task.spawn(function()
         local lastRaw = initialRaw
         while true do
-            task.wait(5) -- Checks every 5 seconds instead of 1
+            task.wait(5)
             pcall(function()
                 local url = BASE_URL .. "/api/active-config?t=" .. tostring(tick())
                 local raw = game:HttpGet(url)
                 if raw and raw ~= "" and not raw:find("No active configuration") and raw ~= lastRaw then
                     lastRaw = raw
-                    local configCode = extractConfigTable(raw)
-                    if configCode then
-                        local loadFunc = loadstring(configCode)
-                        if loadFunc then
-                            local env = getfenv(0)
-                            if setfenv then pcall(setfenv, loadFunc, env) end
-                            loadFunc()
+                    local tableStr = extractConfigTable(raw)
+                    if tableStr then
+                        local newConfig = parseWebConfig(tableStr)
+                        if newConfig then
+                            deepMerge(shared.xvory, newConfig)
                             shared.xvory.Settings = shared.xvory.Settings or {}
                             shared.xvory.Settings.Method = "Web"
-                            if getgenv().ApplyAvatarChanger then
-                                getgenv().ApplyAvatarChanger()
-                            end
                             if getgenv().ApplyGunDelays then
                                 getgenv().ApplyGunDelays()
                             end
@@ -447,9 +441,7 @@ local function runXvory()
     end)
     return true
 end
-
 runXvory()
-
 local aliases = {
     ["[Double-Barrel SG]"] = {"db", "double barrel", "double-barrel", "dbl sg", "double sg", "db sg"},
     ["[TacticalShotgun]"] = {"tac", "tac sg", "tactical shotgun", "tactical sg", "tacshot", "tactical"},
@@ -540,7 +532,6 @@ local TriggerPart = Instance.new("Part")
 TriggerPart.Name = math.random(1, 99999999)
 local SilentAimPart = Instance.new("Part")
 SilentAimPart.Name = math.random(1, 99999999)
-
 local function GameFunctions()
     SetRegion("Game Functions")
     return {
@@ -590,7 +581,6 @@ local function ThreadLoop(Wait, Func)
         end
     end)
 end
-
 local function ThreadFunction(Func, Name, ...)
     local WrappedFunc = Name and function()
         local Passed, Statement = pcall(Func)
@@ -602,34 +592,33 @@ local function ThreadFunction(Func, Name, ...)
     coroutine.resume(Thread, ...)
     return Thread
 end
-
 local function RBXConnection(Signal, Callback)
     local connection = Signal:Connect(Callback)
+    table.insert(getgenv().XvoryConnections, connection)
     Script.RBXConnections[#Script.RBXConnections + 1] = connection
     return connection
 end
-
 do
     SetRegion("Drawing")
     local CustomLibIndex = 0
-
     local coreGui = game:GetService("CoreGui")
     local playerGui = game.Players.LocalPlayer:FindFirstChild("PlayerGui")
     local targetGui = coreGui or playerGui or Instance.new("ScreenGui")
-
+    for _, child in ipairs(targetGui:GetChildren()) do
+        if child.Name == "XvoryUI" then
+            pcall(function() child:Destroy() end)
+        end
+    end
     local UtilityUI = Instance.new("ScreenGui")
     UtilityUI.Name = "XvoryUI"
     UtilityUI.IgnoreGuiInset = true
     UtilityUI.Parent = targetGui
-
     if not UtilityUI.Parent then
         UtilityUI.Parent = game.Players.LocalPlayer
     end
-
     local Clamp = math.clamp
     local Atan2 = math.atan2
     local Deg = math.deg
-
     local LibraryMeta = setmetatable({
         Visible = true,
         ZIndex = 0,
@@ -646,11 +635,9 @@ do
             return result
         end
     })
-
     local function ClampTransparency(number)
         return Clamp(1 - number, 0, 1)
     end
-
     Script.Visuals = Script.Visuals or {}
     Script.Visuals.new = function(ClassType)
         CustomLibIndex = CustomLibIndex + 1
@@ -670,7 +657,6 @@ do
             Line.BackgroundTransparency = ClampTransparency(LineObject.Transparency)
             Line.Size = UDim2.new()
             Line.Parent = UtilityUI
-
             return setmetatable({}, {
                 __newindex = function(_, Property, Value)
                     if Property == "From" then
@@ -738,7 +724,6 @@ do
             circleFrame.Parent = UtilityUI
             uiCorner.Parent = circleFrame
             uiStroke.Parent = circleFrame
-
             return setmetatable({}, {
                 __newindex = function(_, index, value)
                     if circleObj[index] == nil then return end
@@ -804,7 +789,6 @@ do
             uiStroke.LineJoinMode = Enum.LineJoinMode.Miter
             squareFrame.Parent = UtilityUI
             uiStroke.Parent = squareFrame
-
             local dragging = false
             local dragStart = nil
             local startPos = nil
@@ -838,7 +822,6 @@ do
                     dragging = false
                 end
             end)
-
             return setmetatable({}, {
                 __newindex = function(_, index, value)
                     if squareObj[index] == nil then return end
@@ -905,7 +888,6 @@ do
             uiStroke.Color = textObj.Color
             textLabel.Parent = UtilityUI
             uiStroke.Parent = textLabel
-
             return setmetatable({}, {
                 __newindex = function(_, index, value)
                     if textObj[index] == nil then return end
@@ -952,7 +934,6 @@ do
         end
     end
 end
-
 do
     SetRegion("Game")
     function Script:RayCast(Part, Origin, Ignore, Distance)
@@ -963,14 +944,12 @@ do
         local Hit = Workspace:FindPartOnRayWithIgnoreList(Cast, Ignore)
         return Hit and Hit:IsDescendantOf(Part.Parent), Hit
     end
-
     function Script:ValidateClient(Player)
         local Object = Player.Character
         local Humanoid = (Object and Object:FindFirstChild("Humanoid")) or false
         local RootPart = (Humanoid and Humanoid.RootPart) or false
         return Object, Humanoid, RootPart
     end
-
     function Script:GetOrigin(Origin)
         local Object, Humanoid, RootPart = Script:ValidateClient(Self)
         if Origin == "Head" then
@@ -983,7 +962,6 @@ do
         end
         return Workspace.CurrentCamera.CFrame.Position
     end
-
     function Script:GetClosestPlayerToCursor(Max, FOV, ignoreWallCheckForTargeting)
         local CurrentCamera = game.Workspace.CurrentCamera
         local MousePosition = UserInputService:GetMouseLocation()
@@ -1023,7 +1001,6 @@ do
         return Closest
     end
 end
-
 do
     SetRegion("Gun System")
     function Modules.DaHood()
@@ -1095,7 +1072,6 @@ do
                     return
                 end
             end
-
             local function ColorTransform(p14, p15)
                 if p15 == 0 then
                     return p14.Keypoints[1].Value
@@ -1112,7 +1088,6 @@ do
                     end
                 end
             end
-
             local weaponNames = {
                 "[Shotgun]",
                 "[Drum-Shotgun]",
@@ -1124,7 +1099,6 @@ do
                 "[LMG]",
                 "[SilencerAR]",
             }
-
             local replicatedStorage = game:GetService("ReplicatedStorage")
             local playersService = game:GetService("Players")
             local localPlayer = playersService.LocalPlayer
@@ -1135,9 +1109,7 @@ do
             local aimShootAnimation = playerCharacter.Humanoid.Animator:LoadAnimation(
                 replicatedStorage:WaitForChild("Animations"):WaitForChild("GunCombat"):WaitForChild("AimShoot")
             )
-
             local v_u_14 = {}
-
             local function changefunc()
                 local v_u_38 = {
                     ["functions"] = {},
@@ -1157,7 +1129,6 @@ do
                 end
                 return v_u_38
             end
-
             setmetatable(v_u_14, {
                 ["__index"] = function(_, p42)
                     local v43 = v_u_14
@@ -1183,7 +1154,6 @@ do
                     end
                 end
             })
-
             UserInputService.InputBegan:connect(function(p51, p52)
                 if not p52 or p51.UserInputType == Enum.UserInputType.Keyboard and p51.KeyCode == Enum.KeyCode.LeftShift or p51.UserInputType == Enum.UserInputType.Gamepad1 and p51.KeyCode == Enum.KeyCode.ButtonL2 then
                     if p51.UserInputType == Enum.UserInputType.Keyboard or p51.UserInputType == Enum.UserInputType.Gamepad1 then
@@ -1218,7 +1188,6 @@ do
                     end
                 end
             end)
-
             local v_u_70 = true
             v_u_14.MouseButton2.changed:connect(function(p71, _, _)
                 if v_u_70 ~= false then
@@ -1230,7 +1199,6 @@ do
                     end
                 end
             end)
-
             local function Animate(target)
                 playerCharacter = localPlayer.Character or localPlayer.CharacterAdded:Wait()
                 if playerCharacter and playerCharacter:FindFirstChild("Humanoid") and playerCharacter.Humanoid:FindFirstChild("Animator") then
@@ -1243,7 +1211,6 @@ do
                     end
                 end
             end
-
             shared.playerShot = Animate
             local v3 = game:GetService("Players")
             local v_u_5 = game:GetService("TweenService")
@@ -1252,7 +1219,6 @@ do
             local v_u_13 = game.Workspace:GetServerTimeNow()
             local _ = game.PlaceId == 88976059384565
             local SoundsPlaying = {}
-
             local function GetAim(Position)
                 if _G.MobileShiftLock then
                     return (Camera.CFrame.p + Camera.CFrame.LookVector * 60 - Position).unit
@@ -1271,7 +1237,6 @@ do
                 end
                 return (v24 - Position).Unit, (v24 - Position).Magnitude
             end
-
             local function ShootGun(p34)
                 local v35 = p34.Shooter
                 local v_u_36 = p34.Handle
@@ -1579,11 +1544,9 @@ do
         end
     end
 end
-
 do
     SetRegion("Main")
     local DaHood = Modules.Get("DaHood")
-    
     function Script:GetClosestPointOnScreen(Character)
         local mousePos = UserInputService:GetMouseLocation()
         local ray = Camera:ViewportPointToRay(mousePos.X, mousePos.Y)
@@ -1597,7 +1560,6 @@ do
         end
         return nil
     end
-    
     function Script:GetClosestPointOnPart(Part, Scale)
         local PartCFrame = Part.CFrame
         local PartSize = Part.Size
@@ -1615,7 +1577,6 @@ do
             math.clamp(Transformed.Z, -PartSizeTransformed.Z, PartSizeTransformed.Z)
         )
     end
-
     function Script:GetClosestPointOnPartBasic(Part)
         if Part then
             local MouseRay = Mouse.UnitRay
@@ -1635,7 +1596,6 @@ do
             end
         end
     end
-
     function Script:GetClosestPartToCursor(Character)
         local CurrentCamera = Workspace.CurrentCamera
         local Closest
@@ -1654,7 +1614,6 @@ do
         end
         return Closest
     end
-
     function Script:GetClosestPartToCursorFilter(Character, PartsToCheck)
         local CurrentCamera = Workspace.CurrentCamera
         local Closest
@@ -1673,7 +1632,6 @@ do
         end
         return Closest
     end
-
     function Script:ApplyNormalPredictionFormula(Humanoid, Position, Velocity)
         local IsInAir = Humanoid:GetState() == Enum.HumanoidStateType.Freefall or Humanoid:GetState() == Enum.HumanoidStateType.Jumping
         local TargetVelocity = Velocity
@@ -1688,13 +1646,11 @@ do
         local PredictedCFrame = ClosestPoint + PredictionVelocity
         return Vector3.new(PredictedCFrame.X, PredictedCFrame.Y, PredictedCFrame.Z)
     end
-
     function Script:ApplyRecalculatedPredictionFormula(RootPart, Position)
         local PredictionVelocity = Script:GetResolvedVelocity(RootPart) * Vector3.new(shared.xvory.Silent.Prediction.x, shared.xvory.Silent.Prediction.y, shared.xvory.Silent.Prediction.z)
         local PredictedCFrame = Position + PredictionVelocity
         return PredictedCFrame
     end
-
     function Script:GetResolvedVelocity(Part)
         local LastPosition = Part.Position
         task.wait(0.085)
@@ -1702,9 +1658,7 @@ do
         local Velocity = (CurrentPosition - LastPosition) / 0.085
         return Velocity
     end
-
     local smoothedVelocity = Vector3.new(0, 0, 0)
-
     local function getDynamicSmoothingFactor(velocityMagnitude)
         if velocityMagnitude < 5 then
             return 0.05
@@ -1714,7 +1668,6 @@ do
             return 0.2
         end
     end
-
     local function GetResolvedVelocity(Part)
         local LastPosition = Part.Position
         task.wait(0.085)
@@ -1725,7 +1678,6 @@ do
         smoothedVelocity = smoothedVelocity * (1 - dynamicSmoothing) + Velocity * dynamicSmoothing
         return smoothedVelocity * Vector3.new(1, 0, 1)
     end
-
     function Script:GetHitPosition(Mode)
         if Mode == "Silent" then
             local Config = shared.xvory.Silent
@@ -1769,7 +1721,6 @@ do
         end
         return nil
     end
-
     function Script:ShouldShoot(Target)
         if not Target then
             SilentAimPart.Position = Vector3.zero
@@ -1812,10 +1763,8 @@ do
         end
         return allConditionsPassed
     end
-
     local Ticks = {}
     local SGTick = tick()
-
     function Script:GetGunCategory()
         if Self and Self.Character then
             local Tool = Self.Character:FindFirstChildWhichIsA("Tool")
@@ -1845,7 +1794,6 @@ do
         end
         return nil
     end
-
     function Script:silentFunc(Tool)
         if string.find(GameName, "Dee Hood") or string.find(GameName, "Der Hood") and shared.xvory.Silent.Enabled then
             if Script.Locals.SilentAimTarget and Script.Locals.SilentAimTarget.Character then
@@ -1880,13 +1828,10 @@ do
                 local Cooldown = Tool:WaitForChild("ShootingCooldown").Value
                 local NoClueWhatThisIs = game.PlaceId == 88976059384565 and { ["Value"] = 5 } or Tool.Ammo
                 local Time = game.Workspace:GetServerTimeNow()
-
                 local Check = tick() - Ticks[Tool.Name] >= Cooldown
-
                 local ToolEvent = Tool:WaitForChild("RemoteEvent", 2) or { ["FireServer"] = function(_, _) end }
                 local DoubleTap = shared.xvory.Weapon["2Tap"].Enabled and Script.Locals.IsDoubleTapping
                 local BeamCol = Color3.new(1, 0.545098, 0.14902)
-
                 local function ShootFunc(GunType, SilentAim)
                     if GunType == "Shotgun" then
                         if Check and (NoClueWhatThisIs.Value >= 1 and (not _G.GUN_COMBAT_TOGGLE and DaHood.CanShoot(Self.Character))) then
@@ -2150,16 +2095,13 @@ do
             end
         end
     end
-
     function Script:Camlock()
         local camlockConfig = shared.xvory.Camlock
         if not camlockConfig.Enabled then return end
         local targetPlayer = Script.Locals.SilentAimTarget
         if not targetPlayer then return end
-
         local target = targetPlayer.Character
         if not target then return end
-
         local cond = camlockConfig.Conditions
         if cond.Visible then
             if not Script:RayCast(target.HumanoidRootPart, Script:GetOrigin("Camera"), {Self.Character, TriggerPart, SilentAimPart}) then
@@ -2175,11 +2117,9 @@ do
         if cond.Grabbed and CurrentGame.Functions.IsGrabbed(targetPlayer) then
             return
         end
-
         local hitPart = target:FindFirstChild(camlockConfig.HitPart)
         if not hitPart then hitPart = target:FindFirstChild("HumanoidRootPart") or target:FindFirstChild("Head") end
         if not hitPart then return end
-
         if camlockConfig.Fov.Enabled then
             local camFovSize = camlockConfig.Fov.Size
             local targetScreenPos, onScreen = Camera:WorldToViewportPoint(hitPart.Position)
@@ -2188,7 +2128,6 @@ do
             local dist = (Vector2.new(targetScreenPos.X, targetScreenPos.Y) - mousePos).Magnitude
             if dist > camFovSize then return end
         end
-
         local targetPos = hitPart.Position
         if camlockConfig.Pred.Enabled then
             local root = target:FindFirstChild("HumanoidRootPart")
@@ -2197,7 +2136,6 @@ do
                 targetPos = targetPos + Vector3.new(vel.X * camlockConfig.Pred.X, vel.Y * camlockConfig.Pred.Y, vel.Z * camlockConfig.Pred.Z)
             end
         end
-
         local currentCF = Camera.CFrame
         local newCF = CFrame.new(currentCF.Position, targetPos)
         local easing = camlockConfig.EasingMode
@@ -2205,14 +2143,12 @@ do
         local smooth = TweenService:GetValue(camlockConfig.Sticky, Enum.EasingStyle[easing], Enum.EasingDirection[easingDir])
         Camera.CFrame = currentCF:Lerp(newCF, smooth)
     end
-
     local function ActivateTool()
         local Tool = Self.Character:FindFirstChildOfClass("Tool")
         if Tool ~= nil and Tool:IsDescendantOf(Self.Character) and Tool.Name ~= "[Knife]" then
             Tool:Activate()
         end
     end
-
     local function raycast(origin, direction, raycastParams)
         local result = workspace:Raycast(origin, direction, raycastParams)
         if result and result.Instance then
@@ -2225,16 +2161,13 @@ do
         end
         return nil
     end
-
     local raycastParams = RaycastParams.new()
     raycastParams.FilterType = Enum.RaycastFilterType.Whitelist
     raycastParams.FilterDescendantsInstances = {TriggerPart}
-
     function Script:triggerFunc()
         local triggerBotConfig = shared.xvory.Triggerbot
         local locals = Script.Locals
         local target = locals.TriggerbotTarget and locals.TriggerbotTarget.Character
-
         local scale = triggerBotConfig.Fov.Scale or 1.0
         local fovX = triggerBotConfig.Fov.X * scale
         local fovY = triggerBotConfig.Fov.Y * scale
@@ -2245,7 +2178,6 @@ do
         TriggerPart.CanCollide = false
         TriggerPart.Transparency = triggerBotConfig.Fov.Visible and 0.7 or 1
         TriggerPart.Color = Color3.new(1, 0, 0)
-
         local weaponAllowed = true
         if shared.xvory.Silent["Client Mode"].Enabled then
             local tool = Self.Character and Self.Character:FindFirstChildOfClass("Tool")
@@ -2257,7 +2189,6 @@ do
             TriggerPart.Position = Vector3.zero
             return
         end
-
         local isSelectMode = triggerBotConfig.Mode == "Target"
         if target then
             local selfCharacter = Self.Character
@@ -2322,7 +2253,6 @@ do
             TriggerPart.Position = Vector3.zero
         end
     end
-
     function Script:TriggerShot(interval)
         local locals = Script.Locals
         local currentTime = tick()
@@ -2331,7 +2261,6 @@ do
             ActivateTool()
         end
     end
-
     function Script:playerFunc()
         if not Self.Character then return end
         if shared.xvory["Player Modifications"]["Anti Fall"] then
@@ -2341,27 +2270,22 @@ do
         end
     end
 end
-
 do
     local FieldOfViewCircle = Script.Visuals.new("Circle")
     FieldOfViewCircle.Color = Color3.fromRGB(255, 255, 255)
     FieldOfViewCircle.Thickness = 1
     FieldOfViewCircle.Transparency = 1
     Script.Locals.FieldOfViewTwo = FieldOfViewCircle
-
     local CamlockFOVCircle = Script.Visuals.new("Circle")
     CamlockFOVCircle.Color = Color3.fromRGB(0, 255, 0)
     CamlockFOVCircle.Thickness = 1
     CamlockFOVCircle.Transparency = 0.5
-
     local function UpdateDrawings()
         local Character = Self.Character
         if not Character then return end
         local Tool = Character:FindFirstChildWhichIsA("Tool")
-        
         local silentFovConfig = shared.xvory.Silent.Fov
         local weaponConfigs = silentFovConfig["Weapon Configuration"]
-        
         if weaponConfigs.Enabled and Tool then
             if table.find(WeaponInfo.Shotguns, Tool.Name) then
                 SilentFOVRadius = weaponConfigs.Shotguns.circle
@@ -2376,13 +2300,11 @@ do
         Script.Locals.FieldOfViewTwo.Visible = silentFovConfig.Enabled and silentFovConfig.Visible
         Script.Locals.FieldOfViewTwo.Radius = SilentFOVRadius
         Script.Locals.FieldOfViewTwo.Position = Vector2.new(Mouse.X, Mouse.Y + GuiInsetOffsetY)
-
         local camlockConfig = shared.xvory.Camlock
         CamlockFOVCircle.Visible = camlockConfig.Enabled and camlockConfig.Fov.Enabled and camlockConfig.Fov.Visible
         CamlockFOVCircle.Radius = camlockConfig.Fov.Size
         CamlockFOVCircle.Position = Vector2.new(Mouse.X, Mouse.Y + GuiInsetOffsetY)
     end
-
     local Activated
     local function OnLocalCharacterAdded(Character)
         if (not Character) then
@@ -2407,7 +2329,6 @@ do
     end
     OnLocalCharacterAdded(Self.Character)
     Self.CharacterAdded:Connect(OnLocalCharacterAdded)
-
     ThreadLoop(0.0001, function()
         if string.find(GameName, "Da Hood") then
             local GunType = Script:GetGunCategory()
@@ -2447,11 +2368,9 @@ do
             end
         end
     end)
-
     local SP = false
     local SP2 = false
     local SP3 = false
-
     RBXConnection(UserInputService.InputBegan, function(Input, Processed)
         if shared.xvory.Silent.Conditions.Chat and UserInputService:GetFocusedTextBox() then return end
         local TargetKey = Enum.KeyCode[shared.xvory.Settings.General.Keybind["Target"]]
@@ -2459,7 +2378,6 @@ do
         local DoubleTapKey = Enum.KeyCode[shared.xvory.Settings.General.Keybind["2Tap"]]
         local TriggerbotKey = Enum.KeyCode[shared.xvory.Settings.General.Keybind["Triggerbot"]]
         local ESPToggle = Enum.KeyCode[shared.xvory.Settings.General.Keybind["ESP"]]
-
         if Input.KeyCode == ESPToggle then
             shared.xvory.ESP.Enabled = not shared.xvory.ESP.Enabled
         end
@@ -2471,8 +2389,8 @@ do
             SP2 = SP
             if SP then
                 Script.Locals.SilentAimTarget = Script:GetClosestPlayerToCursor(
-                    SilentAimConfig["Max Dist"],
-                    SilentAimConfig.Fov.Enabled and SilentFOVRadius or math.huge,
+                    shared.xvory.Silent["Max Dist"],
+                    shared.xvory.Silent.Fov.Enabled and SilentFOVRadius or math.huge,
                     true
                 )
                 Script.Locals.TriggerbotTarget = Script.Locals.SilentAimTarget
@@ -2569,7 +2487,6 @@ do
             end
         end
     end)
-
     RBXConnection(UserInputService.InputEnded, function(Input, Processed)
         if shared.xvory.Silent.Conditions.Chat and UserInputService:GetFocusedTextBox() then return end
         local triggerConfig = shared.xvory.Triggerbot.Works
@@ -2590,8 +2507,7 @@ do
             CanTriggerbotShoot = true
         end
     end)
-
-    RBXConnection(RunService.PreRender, LPH_NO_VIRTUALIZE(function()
+    RBXConnection(RunService.RenderStepped, LPH_NO_VIRTUALIZE(function()
         local silentAimConfig = shared.xvory.Silent
         local triggerBotConfig = shared.xvory.Triggerbot
         if silentAimConfig.Mode == "Automatic" then
@@ -2620,10 +2536,15 @@ do
         ThreadFunction(Script.playerFunc)
         UpdateDrawings()
     end))
-
+    if getgenv().XvoryESP and getgenv().XvoryESP.TextLabels then
+        for plr, data in pairs(getgenv().XvoryESP.TextLabels) do
+            if data.gui then pcall(function() data.gui:Destroy() end) end
+        end
+    end
     local ESP = {
         TextLabels = {}
     }
+    getgenv().XvoryESP = ESP
     local function IsPlayerAlive(plr)
         local char = plr.Character
         local humanoid = char and char:FindFirstChild("Humanoid")
@@ -2720,30 +2641,26 @@ do
             CreateESPForPlayer(plr)
         end
     end
-    Players.PlayerAdded:Connect(function(plr)
+    RBXConnection(Players.PlayerAdded, function(plr)
         if plr == Self then return end
         CreateESPForPlayer(plr)
     end)
-    Players.PlayerRemoving:Connect(function(plr)
+    RBXConnection(Players.PlayerRemoving, function(plr)
         if ESP.TextLabels[plr] and ESP.TextLabels[plr].gui then
             ESP.TextLabels[plr].gui:Destroy()
             ESP.TextLabels[plr] = nil
         end
     end)
-    RunService.RenderStepped:Connect(UpdateESP)
+    RBXConnection(RunService.RenderStepped, UpdateESP)
 end
-
 do
     local PlayersService = game:GetService("Players")
     local LocalPlayer = PlayersService.LocalPlayer
-
     if not LPH_NO_VIRTUALIZE then
         LPH_NO_VIRTUALIZE = function(func) return func end
     end
-
     local hasApplied = false
     local initialApplyDone = false
-
     local function ReloadAnimate(character)
         local animate = character:FindFirstChild("Animate")
         if animate then
@@ -2752,7 +2669,6 @@ do
             animate.Disabled = false
         end
     end
-
     local function ForceStand(humanoid)
         if not humanoid then return end
         humanoid.Sit = false
@@ -2768,29 +2684,42 @@ do
             end
         end
     end
-
+    local function attachAccessoryLocally(acc, char)
+        local handle = acc:FindFirstChild("Handle")
+        if not handle then return end
+        local accAttachment = handle:FindFirstChildOfClass("Attachment")
+        if not accAttachment then return end
+        local charAttachment
+        for _, part in ipairs(char:GetChildren()) do
+            if part:IsA("BasePart") then
+                charAttachment = part:FindFirstChild(accAttachment.Name)
+                if charAttachment then break end
+            end
+        end
+        if not charAttachment then return end
+        acc.Parent = char
+        handle.CFrame = charAttachment.Parent.CFrame * charAttachment.CFrame * accAttachment.CFrame:Inverse()
+        local weld = Instance.new("WeldConstraint")
+        weld.Part0 = charAttachment.Parent
+        weld.Part1 = handle
+        weld.Parent = handle
+    end
     local function ChangeAvatar()
         local avatarConfig = shared.xvory and shared.xvory["Player Modifications"] and shared.xvory["Player Modifications"]["Avatar Changer"]
         if not avatarConfig or not avatarConfig.Enabled or not avatarConfig.Username or avatarConfig.Username == "" then return end
         if hasApplied then return end
-
-        local character = LocalPlayer.Character
-        if not character then return end
-
-        local humanoid = character:FindFirstChildOfClass("Humanoid")
-        if not humanoid then return end
-
         hasApplied = true
-
-        LPH_NO_VIRTUALIZE(function()
+        task.spawn(function()
+            local character = LocalPlayer.Character or LocalPlayer.CharacterAdded:Wait()
+            local humanoid = character:WaitForChild("Humanoid")
+            local targetUsername = avatarConfig.Username
             local success, userId = pcall(function()
-                return PlayersService:GetUserIdFromNameAsync(avatarConfig.Username)
+                return PlayersService:GetUserIdFromNameAsync(targetUsername)
             end)
             if not success or not userId then
                 hasApplied = false
                 return
             end
-
             local descSuccess, desc = pcall(function()
                 return PlayersService:GetHumanoidDescriptionFromUserId(userId)
             end)
@@ -2798,9 +2727,7 @@ do
                 hasApplied = false
                 return
             end
-
             ForceStand(humanoid)
-
             for _, obj in ipairs(character:GetChildren()) do
                 if obj:IsA("Shirt")
                 or obj:IsA("Pants")
@@ -2809,37 +2736,28 @@ do
                     obj:Destroy()
                 end
             end
-
             desc.WidthScale = 0.502
             desc.DepthScale = 0.502
             desc.HeadScale = humanoid:FindFirstChild("HeadScale") and humanoid.HeadScale.Value or desc.HeadScale
             desc.HeightScale = humanoid:FindFirstChild("BodyHeightScale") and humanoid.BodyHeightScale.Value or desc.HeightScale
             desc.ProportionScale = humanoid:FindFirstChild("BodyProportionScale") and humanoid.BodyProportionScale.Value or desc.ProportionScale
             desc.BodyTypeScale = humanoid:FindFirstChild("BodyTypeScale") and humanoid.BodyTypeScale.Value or desc.BodyTypeScale
-
             local targetEmotes = {}
             local targetEquipped = {}
-
             local emotesSuccess, emotes = pcall(function() return desc:GetEmotes() end)
             local equippedSuccess, equipped = pcall(function() return desc:GetEquippedEmotes() end)
-
             if emotesSuccess and type(emotes) == "table" then targetEmotes = emotes end
             if equippedSuccess and type(equipped) == "table" then targetEquipped = equipped end
-
             if next(targetEmotes) then
                 for name, ids in pairs(targetEmotes) do
                     pcall(function() desc:SetEmotes(name, ids) end)
                 end
             end
-
             if next(targetEquipped) then
                 pcall(function() desc:SetEquippedEmotes(targetEquipped) end)
             end
-
             humanoid:ApplyDescriptionClientServer(desc)
-
             task.wait(0.15)
-
             if avatarConfig.Misc and avatarConfig.Misc.Headless then
                 local head = character:FindFirstChild("Head")
                 if head then
@@ -2848,55 +2766,46 @@ do
                     if face then face.Transparency = 1 end
                 end
             end
-
             if avatarConfig.Misc and avatarConfig.Misc.Korblox then
                 local rightLowerLeg = character:FindFirstChild("RightLowerLeg")
                 local rightUpperLeg = character:FindFirstChild("RightUpperLeg")
                 local rightFoot = character:FindFirstChild("RightFoot")
-
                 if rightLowerLeg then
-                    rightLowerLeg.MeshId = "902942093"
+                    pcall(function() rightLowerLeg.MeshId = "902942093" end)
                     rightLowerLeg.Transparency = 1
                 end
-
                 if rightUpperLeg then
-                    rightUpperLeg.MeshId = "http://www.roblox.com/asset/?id=902942096"
+                    pcall(function() rightUpperLeg.MeshId = "http://www.roblox.com/asset/?id=902942096" end)
                     rightUpperLeg.TextureID = "http://roblox.com/asset/?id=902843398"
                     rightUpperLeg.Size = rightUpperLeg.Size * Vector3.new(1.2, 1, 1.2)
                 end
-
                 if rightFoot then
-                    rightFoot.MeshId = "902942089"
+                    pcall(function() rightFoot.MeshId = "902942089" end)
                     rightFoot.Transparency = 1
                 end
             end
-
             ForceStand(humanoid)
             ReloadAnimate(character)
             initialApplyDone = true
-        end)()
+        end)
     end
-
     getgenv().ApplyAvatarChanger = function()
         local avatarConfig = shared.xvory and shared.xvory["Player Modifications"] and shared.xvory["Player Modifications"]["Avatar Changer"]
         if not avatarConfig or not avatarConfig.Enabled or not avatarConfig.Username or avatarConfig.Username == "" then return end
         hasApplied = false
+        initialApplyDone = false
         ChangeAvatar()
     end
-
     local function HookCharacter(character)
         hasApplied = false
         initialApplyDone = false
         task.wait(0.1)
         ChangeAvatar()
     end
-
     if getgenv().AvatarChangerConnection then
         getgenv().AvatarChangerConnection:Disconnect()
     end
-
     getgenv().AvatarChangerConnection = LocalPlayer.CharacterAdded:Connect(HookCharacter)
-
     if LocalPlayer.Character then
         ChangeAvatar()
     end

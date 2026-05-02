@@ -12,9 +12,57 @@ const DATA_FILE = path.join(__dirname, 'data.json');
 app.use(cors());
 app.use(express.json({ limit: '50mb' }));
 app.use(express.urlencoded({ extended: true, limit: '50mb' }));
-app.use(express.static(path.join(__dirname, 'public')));
+const rateLimitStore = {};
+const RATE_WINDOW = 15 * 60 * 1000;
+const RATE_MAX = 200;
+app.use('/api/', (req, res, next) => {
+    const ip = req.ip || req.connection.remoteAddress;
+    const now = Date.now();
+    if (!rateLimitStore[ip] || now - rateLimitStore[ip].start > RATE_WINDOW) {
+        rateLimitStore[ip] = { start: now, count: 1 };
+    } else {
+        rateLimitStore[ip].count++;
+    }
+    if (rateLimitStore[ip].count > RATE_MAX) {
+        return res.status(429).json({ success: false, message: 'Too many requests, try again later.' });
+    }
+    next();
+});
+const crypto = require('crypto');
+let sessions = {};
 
-// --- Persistent Storage ---
+app.use((req, res, next) => {
+    res.setHeader('X-Content-Type-Options', 'nosniff');
+    res.setHeader('X-Frame-Options', 'DENY');
+    res.setHeader('X-XSS-Protection', '1; mode=block');
+    res.setHeader('Referrer-Policy', 'no-referrer');
+    res.setHeader('Permissions-Policy', 'camera=(), microphone=(), geolocation=()');
+    res.removeHeader('X-Powered-By');
+
+    if (req.path.endsWith('.js') && !req.path.includes('/api/')) {
+        res.setHeader('Cache-Control', 'no-store');
+        res.setHeader('SourceMap', '');
+    }
+
+    if (req.path.endsWith('.map')) {
+        return res.status(404).send('Not found');
+    }
+
+    next();
+});
+
+app.get('/app.js', (req, res) => {
+    res.status(404).send('Not found');
+});
+
+app.use(express.static(path.join(__dirname, 'public'), {
+    setHeaders: (res, filePath) => {
+        if (filePath.endsWith('.js')) {
+            res.setHeader('Content-Type', 'application/javascript; charset=utf-8');
+        }
+    }
+}));
+
 let configs = [];
 let activeConfigId = null;
 let users = [];
@@ -46,16 +94,13 @@ function saveData() {
     }
 }
 
-// Load saved data on startup
 loadData();
 
-// --- Helper: get active config object ---
 function getActiveConfig() {
     if (!activeConfigId) return null;
     return configs.find(c => c.id === activeConfigId) || null;
 }
 
-// --- Routes ---
 app.get('/', (req, res) => {
     const indexPath = path.join(__dirname, 'public', 'index.html');
     if (fs.existsSync(indexPath)) {
@@ -116,7 +161,7 @@ function verifyTurnstileToken(token) {
 app.post('/api/register', async (req, res) => {
     const { username, password, license, cfToken } = req.body;
     if (!username || !password || !license || !cfToken) {
-        return res.status(400).json({ success: false, message: "Username, password, license, and verification token are required" });
+        return res.status(400).json({ success: false, message: "Username, password, license, and verification are required" });
     }
 
     const isHuman = await verifyTurnstileToken(cfToken);
@@ -132,7 +177,18 @@ app.post('/api/register', async (req, res) => {
         return res.status(400).json({ success: false, message: "Username already exists" });
     }
 
-    const newUser = { username, password, license, role: license === "xvory-admin" ? "Admin" : "User" };
+    const newUser = {
+        id: Date.now().toString(),
+        username,
+        password,
+        license,
+        role: license === "xvory-admin" ? "Admin" : "User",
+        registeredAt: new Date().toISOString(),
+        lastLogin: null,
+        robloxUsername: "",
+        gamePlaceId: "",
+        gamePlaceName: ""
+    };
     users.push(newUser);
     saveData();
     res.json({ success: true, message: "Registered successfully" });
@@ -141,9 +197,6 @@ app.post('/api/register', async (req, res) => {
 app.post('/api/login', async (req, res) => {
     const { username, password, cfToken } = req.body;
 
-    // Auto-login (saved from localStorage) doesn't have cfToken, so we can make cfToken optional for login
-    // BUT since we want to protect the login form, if they use the form, they MUST send cfToken.
-    // If cfToken is provided, verify it.
     if (cfToken) {
         const isHuman = await verifyTurnstileToken(cfToken);
         if (!isHuman) {
@@ -157,10 +210,109 @@ app.post('/api/login', async (req, res) => {
 
     const user = users.find(u => u.username === username && u.password === password);
     if (user) {
-        res.json({ success: true, message: "Login successful", user: { username: user.username, role: user.role } });
+        user.lastLogin = new Date().toISOString();
+        const userConfigCount = configs.filter(c => c.owner === user.username || !c.owner).length;
+        const sessionToken = crypto.randomBytes(32).toString('hex');
+        sessions[sessionToken] = user.username;
+        saveData();
+        res.json({
+            success: true,
+            message: "Login successful",
+            token: sessionToken,
+            user: {
+                id: user.id,
+                username: user.username,
+                role: user.role,
+                license: user.license,
+                pfp: user.pfp,
+                registeredAt: user.registeredAt,
+                lastLogin: user.lastLogin,
+                robloxUsername: user.robloxUsername || "",
+                configsSaved: userConfigCount
+            }
+        });
     } else {
         res.status(401).json({ success: false, message: "Invalid username or password" });
     }
+});
+
+app.post('/api/settings', (req, res) => {
+    const { username, token, pfp } = req.body;
+    if (!token || !sessions[token] || sessions[token] !== username) {
+        return res.status(401).json({ success: false, message: "Unauthorized session" });
+    }
+    const user = users.find(u => u.username === username);
+    if (!user) return res.status(401).json({ success: false, message: "Unauthorized" });
+
+    user.pfp = pfp;
+    saveData();
+    res.json({
+        success: true,
+        user: {
+            id: user.id,
+            username: user.username,
+            role: user.role,
+            license: user.license,
+            pfp: user.pfp,
+            lastUsernameChange: user.lastUsernameChange,
+            registeredAt: user.registeredAt,
+            robloxUsername: user.robloxUsername || ""
+        }
+    });
+});
+
+app.post('/api/change-username', (req, res) => {
+    const { username, token, password, newUsername } = req.body;
+    if (!token || !sessions[token] || sessions[token] !== username) {
+        return res.status(401).json({ success: false, message: "Unauthorized session" });
+    }
+    const user = users.find(u => u.username === username);
+    if (!user) return res.status(401).json({ success: false, message: "Invalid current password" });
+    if (user.password !== password) return res.status(401).json({ success: false, message: "Invalid current password" });
+
+    if (!newUsername || newUsername.trim().length < 3) {
+        return res.status(400).json({ success: false, message: "Username must be at least 3 characters" });
+    }
+
+    if (users.find(u => u.username === newUsername.trim() && u !== user)) {
+        return res.status(400).json({ success: false, message: "Username already taken" });
+    }
+
+    const SEVEN_DAYS = 7 * 24 * 60 * 60 * 1000;
+    if (user.lastUsernameChange) {
+        const timeSince = Date.now() - new Date(user.lastUsernameChange).getTime();
+        if (timeSince < SEVEN_DAYS) {
+            const daysLeft = Math.ceil((SEVEN_DAYS - timeSince) / (24 * 60 * 60 * 1000));
+            return res.status(400).json({ success: false, message: `You can change your username again in ${daysLeft} day(s)` });
+        }
+    }
+
+    user.username = newUsername.trim();
+    user.lastUsernameChange = new Date().toISOString();
+    saveData();
+    res.json({ success: true, message: "Username updated!", user: { username: user.username, role: user.role, license: user.license, pfp: user.pfp, lastUsernameChange: user.lastUsernameChange } });
+});
+
+app.post('/api/change-password', (req, res) => {
+    const { username, token, currentPassword, newPassword } = req.body;
+    if (!token || !sessions[token] || sessions[token] !== username) {
+        return res.status(401).json({ success: false, message: "Unauthorized session" });
+    }
+    const user = users.find(u => u.username === username);
+    if (!user) return res.status(401).json({ success: false, message: "Current password is incorrect" });
+    if (user.password !== currentPassword) return res.status(401).json({ success: false, message: "Invalid current password" });
+
+    if (!newPassword || newPassword.length < 4) {
+        return res.status(400).json({ success: false, message: "New password must be at least 4 characters" });
+    }
+
+    if (newPassword !== confirmPassword) {
+        return res.status(400).json({ success: false, message: "New passwords do not match" });
+    }
+
+    user.password = newPassword;
+    saveData();
+    res.json({ success: true, message: "Password updated!" });
 });
 
 app.get('/api/configs', (req, res) => {
@@ -185,7 +337,6 @@ app.post('/api/configs', (req, res) => {
     res.json({ success: true, config: newConfig });
 });
 
-// Edit/update a config
 app.put('/api/configs/:id', (req, res) => {
     const { id } = req.params;
     const { name, script } = req.body;
@@ -203,7 +354,6 @@ app.put('/api/configs/:id', (req, res) => {
     res.json({ success: true, config: configs[index] });
 });
 
-// Delete a config
 app.delete('/api/configs/:id', (req, res) => {
     const { id } = req.params;
     const index = configs.findIndex(c => c.id === id);
@@ -214,7 +364,6 @@ app.delete('/api/configs/:id', (req, res) => {
 
     const deleted = configs.splice(index, 1)[0];
 
-    // Clear active config if it was deleted
     if (activeConfigId === id) {
         activeConfigId = null;
     }
@@ -239,6 +388,10 @@ app.post('/api/active-config', (req, res) => {
 app.get('/api/active-config', (req, res) => {
     const active = getActiveConfig();
     if (active) {
+        res.set('Content-Type', 'text/plain; charset=utf-8');
+        res.set('Cache-Control', 'no-store, no-cache, must-revalidate, proxy-revalidate');
+        res.set('Pragma', 'no-cache');
+        res.set('Expires', '0');
         res.send(active.script);
     } else {
         res.status(404).send("-- No active configuration set by Xvory Dashboard");
