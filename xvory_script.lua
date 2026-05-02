@@ -410,8 +410,7 @@ local function runXvory()
 
     local success, initialRaw = pcall(fetchAndApply)
     if not success then
-        warn("Initial xvory config failed: " .. tostring(initialRaw))
-        error("Failed to load initial web configuration. Ensure you have an active config.")
+        warn("No active config found on website. Using default local configuration instead.")
     end
 
     task.spawn(function()
