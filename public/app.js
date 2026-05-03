@@ -455,10 +455,7 @@ document.addEventListener('DOMContentLoaded', () => {
                         if (settingsPfpPreview) settingsPfpPreview.src = pfpSrc;
                     }
 
-                    if (maskedKey) {
-                        maskedKey.dataset.key = data.user.license || 'HIDDEN';
-                        maskedKey.textContent = '••••••••';
-                    }
+
 
                     const tierBadge = document.getElementById('tier-badge');
                     if (tierBadge) {
@@ -476,10 +473,11 @@ document.addEventListener('DOMContentLoaded', () => {
                     initEditor();
                     fetchConfigs();
 
+                    SecureStore.set('xvory-session', { username, token: data.token });
                     if (!staySignedIn || staySignedIn.checked) {
                         SecureStore.set('xvory-auth', { username, password });
                     } else {
-                        SecureStore.remove('xvory-session');
+                        SecureStore.remove('xvory-auth');
                     }
 
                     showToast('Authenticated successfully');
@@ -517,10 +515,7 @@ document.addEventListener('DOMContentLoaded', () => {
                         if (settingsPfpPreview) settingsPfpPreview.src = pfpSrc;
                     }
 
-                    if (maskedKey) {
-                        maskedKey.dataset.key = data.user.license || 'HIDDEN';
-                        maskedKey.textContent = '••••••••';
-                    }
+                    SecureStore.set('xvory-session', { username, token: data.token });
 
                     const tierBadge = document.getElementById('tier-badge');
                     if (tierBadge) {
@@ -626,15 +621,48 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     if (toggleKeyBtn) {
+        let keyRevealed = false;
+        let keyHideTimer = null;
         toggleKeyBtn.addEventListener('click', () => {
             const eyeIcon = document.getElementById('eye-icon');
-            if (maskedKey.textContent.includes('•')) {
-                maskedKey.textContent = maskedKey.dataset.key;
-                eyeIcon.innerHTML = '<path d="M17.94 17.94A10.07 10.07 0 0112 20c-7 0-11-8-11-8a18.45 18.45 0 015.06-5.94M9.9 4.24A9.12 9.12 0 0112 4c7 0 11 8 11 8a18.5 18.5 0 01-2.16 3.19m-6.72-1.07a3 3 0 11-4.24-4.24"/><line x1="1" y1="1" x2="23" y2="23"/>';
-            } else {
-                maskedKey.textContent = maskKey(maskedKey.dataset.key);
+            if (keyRevealed) {
+                maskedKey.textContent = '••••••••••••';
+                maskedKey.classList.remove('key-revealed');
                 eyeIcon.innerHTML = '<path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/>';
+                keyRevealed = false;
+                clearTimeout(keyHideTimer);
+                return;
             }
+            const auth = SecureStore.get('xvory-session');
+            if (!auth) { showToast('Session expired', 'error'); return; }
+            maskedKey.textContent = 'Loading...';
+            fetch('/api/get-key', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ username: auth.username, token: auth.token })
+            })
+            .then(r => r.json())
+            .then(data => {
+                if (data.success) {
+                    maskedKey.textContent = data.key;
+                    maskedKey.classList.add('key-revealed');
+                    eyeIcon.innerHTML = '<path d="M17.94 17.94A10.07 10.07 0 0112 20c-7 0-11-8-11-8a18.45 18.45 0 015.06-5.94M9.9 4.24A9.12 9.12 0 0112 4c7 0 11 8 11 8a18.5 18.5 0 01-2.16 3.19m-6.72-1.07a3 3 0 11-4.24-4.24"/><line x1="1" y1="1" x2="23" y2="23"/>';
+                    keyRevealed = true;
+                    keyHideTimer = setTimeout(() => {
+                        maskedKey.textContent = '••••••••••••';
+                        maskedKey.classList.remove('key-revealed');
+                        eyeIcon.innerHTML = '<path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/>';
+                        keyRevealed = false;
+                    }, 10000);
+                } else {
+                    maskedKey.textContent = '••••••••••••';
+                    showToast('Could not retrieve key', 'error');
+                }
+            })
+            .catch(() => {
+                maskedKey.textContent = '••••••••••••';
+                showToast('Connection error', 'error');
+            });
         });
     }
 
