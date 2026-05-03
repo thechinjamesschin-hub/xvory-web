@@ -19,30 +19,47 @@
             constructor() {
                 this.initProtections();
                 this.initDebuggerTrap();
+                this.initDevToolsDetection();
+                this.initConsoleProtection();
             }
             initProtections() {
                 document.addEventListener('contextmenu', e => e.preventDefault());
                 document.addEventListener('keydown', e => {
-                    const isF12 = e.key === 'F12';
-                    const isCtrlShiftI = e.ctrlKey && e.shiftKey && ['I', 'J', 'C'].includes(e.key.toUpperCase());
-                    const isCtrlU = e.ctrlKey && e.key.toUpperCase() === 'U';
-                    if (isF12 || isCtrlShiftI || isCtrlU) {
+                    const k = e.key, c = e.ctrlKey, s = e.shiftKey;
+                    if (k === 'F12' || (c && s && /^[IJC]$/i.test(k)) || (c && /^U$/i.test(k))) {
                         e.preventDefault();
+                        e.stopPropagation();
                         window.location.reload();
+                        return false;
                     }
                 });
                 document.addEventListener('selectstart', e => {
-                    const tag = e.target.tagName;
-                    if (tag !== 'INPUT' && tag !== 'TEXTAREA') {
-                        e.preventDefault();
-                    }
+                    const t = e.target.tagName;
+                    if (t !== 'INPUT' && t !== 'TEXTAREA') e.preventDefault();
                 });
                 document.addEventListener('dragstart', e => e.preventDefault());
             }
             initDebuggerTrap() {
+                const trap = () => { Function('debugger')(); };
+                setInterval(trap, 1);
+                setInterval(() => { eval('debugger;'); }, 1);
+                (function loopTrap() { trap(); setTimeout(loopTrap, 1); })();
+            }
+            initDevToolsDetection() {
+                const threshold = 160;
                 setInterval(() => {
-                    Function("debugger")();
-                }, 10);
+                    if (window.outerWidth - window.innerWidth > threshold ||
+                        window.outerHeight - window.innerHeight > threshold) {
+                        document.body.innerHTML = '';
+                        window.location.reload();
+                    }
+                }, 500);
+            }
+            initConsoleProtection() {
+                const noop = () => {};
+                ['log','warn','error','info','debug','table','trace','dir','group','groupEnd','clear'].forEach(m => {
+                    try { console[m] = noop; } catch(e) {}
+                });
             }
         }
         new SecurityLayer();
