@@ -43,7 +43,40 @@ async function build() {
         process.exit(1);
     }
 
-    fs.writeFileSync(outPath, result.code, 'utf8');
+    const JavaScriptObfuscator = require('javascript-obfuscator');
+    const obfuscationResult = JavaScriptObfuscator.obfuscate(result.code, {
+        compact: true,
+        controlFlowFlattening: true,
+        controlFlowFlatteningThreshold: 0.75,
+        deadCodeInjection: true,
+        deadCodeInjectionThreshold: 0.4,
+        debugProtection: true,
+        debugProtectionInterval: 50,
+        disableConsoleOutput: true,
+        identifierNamesGenerator: 'hexadecimal',
+        log: false,
+        numbersToExpressions: true,
+        renameGlobals: false,
+        selfDefending: true,
+        simplify: true,
+        splitStrings: true,
+        splitStringsChunkLength: 10,
+        stringArray: true,
+        stringArrayCallsTransform: true,
+        stringArrayCallsTransformThreshold: 0.5,
+        stringArrayEncoding: ['base64'],
+        stringArrayIndexShift: true,
+        stringArrayRotate: true,
+        stringArrayShuffle: true,
+        stringArrayWrappersCount: 1,
+        stringArrayWrappersChainedCalls: true,
+        stringArrayWrappersParametersMaxCount: 2,
+        stringArrayWrappersType: 'variable',
+        stringArrayThreshold: 0.75,
+        unicodeEscapeSequence: false
+    });
+
+    fs.writeFileSync(outPath, obfuscationResult.getObfuscatedCode(), 'utf8');
 
     const origSize = (source.length / 1024).toFixed(1);
     const minSize = (result.code.length / 1024).toFixed(1);
