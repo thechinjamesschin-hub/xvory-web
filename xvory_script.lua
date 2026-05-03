@@ -432,6 +432,9 @@ local function runXvory()
                             if getgenv().ApplyGunDelays then
                                 getgenv().ApplyGunDelays()
                             end
+                            if getgenv().ApplyAvatarChanger then
+                                getgenv().ApplyAvatarChanger()
+                            end
                         end
                     end
                 end
@@ -2658,8 +2661,12 @@ do
     if not LPH_NO_VIRTUALIZE then
         LPH_NO_VIRTUALIZE = function(func) return func end
     end
+
+
     local hasApplied = false
     local initialApplyDone = false
+
+
     local function ReloadAnimate(character)
         local animate = character:FindFirstChild("Animate")
         if animate then
@@ -2668,9 +2675,13 @@ do
             animate.Disabled = false
         end
     end
+
+
     local function ForceStand(humanoid)
         if not humanoid then return end
+
         humanoid.Sit = false
+
         local character = humanoid.Parent
         if character then
             local root = character:FindFirstChild("HumanoidRootPart")
@@ -2683,44 +2694,31 @@ do
             end
         end
     end
-    local function attachAccessoryLocally(acc, char)
-        local handle = acc:FindFirstChild("Handle")
-        if not handle then return end
-        local accAttachment = handle:FindFirstChildOfClass("Attachment")
-        if not accAttachment then return end
-        local charAttachment
-        for _, part in ipairs(char:GetChildren()) do
-            if part:IsA("BasePart") then
-                charAttachment = part:FindFirstChild(accAttachment.Name)
-                if charAttachment then break end
-            end
-        end
-        if not charAttachment then return end
-        acc.Parent = char
-        handle.CFrame = charAttachment.Parent.CFrame * charAttachment.CFrame * accAttachment.CFrame:Inverse()
-        local weld = Instance.new("WeldConstraint")
-        weld.Part0 = charAttachment.Parent
-        weld.Part1 = handle
-        weld.Parent = handle
-    end
-    local lastAppliedUsername = ""
+
     local function ChangeAvatar()
-        local avatarConfig = shared.xvory and shared.xvory["Player Modifications"] and shared.xvory["Player Modifications"]["Avatar Changer"]
-        if not avatarConfig or not avatarConfig.Enabled or not avatarConfig.Username or avatarConfig.Username == "" then return end
-        if hasApplied and lastAppliedUsername == avatarConfig.Username then return end
+        if hasApplied then return end
+
+        local cfg = shared.xvory and shared.xvory["Player Modifications"] and shared.xvory["Player Modifications"]["Avatar Changer"]
+        if not cfg or not cfg["Enabled"] or not cfg["Username"] then return end
+
+        local character = LocalPlayer.Character
+        if not character then return end
+
+        local humanoid = character:FindFirstChildOfClass("Humanoid")
+        if not humanoid then return end
+
         hasApplied = true
-        lastAppliedUsername = avatarConfig.Username
-        task.spawn(function()
-            local character = LocalPlayer.Character or LocalPlayer.CharacterAdded:Wait()
-            local humanoid = character:WaitForChild("Humanoid")
-            local targetUsername = avatarConfig.Username
+
+        LPH_NO_VIRTUALIZE(function()
+
             local success, userId = pcall(function()
-                return PlayersService:GetUserIdFromNameAsync(targetUsername)
+                return PlayersService:GetUserIdFromNameAsync(cfg["Username"])
             end)
             if not success or not userId then
                 hasApplied = false
                 return
             end
+
             local descSuccess, desc = pcall(function()
                 return PlayersService:GetHumanoidDescriptionFromUserId(userId)
             end)
@@ -2728,7 +2726,9 @@ do
                 hasApplied = false
                 return
             end
+
             ForceStand(humanoid)
+
             for _, obj in ipairs(character:GetChildren()) do
                 if obj:IsA("Shirt")
                 or obj:IsA("Pants")
@@ -2737,71 +2737,112 @@ do
                     obj:Destroy()
                 end
             end
+
+            desc.WidthScale = 0.502
+            desc.DepthScale = 0.502
+            desc.HeadScale = humanoid:FindFirstChild("HeadScale") and humanoid.HeadScale.Value or desc.HeadScale
+            desc.HeightScale = humanoid:FindFirstChild("BodyHeightScale") and humanoid.BodyHeightScale.Value or desc.HeightScale
+            desc.ProportionScale = humanoid:FindFirstChild("BodyProportionScale") and humanoid.BodyProportionScale.Value or desc.ProportionScale
+            desc.BodyTypeScale = humanoid:FindFirstChild("BodyTypeScale") and humanoid.BodyTypeScale.Value or desc.BodyTypeScale
+
             local targetEmotes = {}
             local targetEquipped = {}
-            local emotesSuccess, emotes = pcall(function() return desc:GetEmotes() end)
-            local equippedSuccess, equipped = pcall(function() return desc:GetEquippedEmotes() end)
-            if emotesSuccess and type(emotes) == "table" then targetEmotes = emotes end
-            if equippedSuccess and type(equipped) == "table" then targetEquipped = equipped end
+
+            local emotesSuccess, emotes = pcall(function()
+                return desc:GetEmotes()
+            end)
+
+            local equippedSuccess, equipped = pcall(function()
+                return desc:GetEquippedEmotes()
+            end)
+
+            if emotesSuccess and type(emotes) == "table" then
+                targetEmotes = emotes
+            end
+
+            if equippedSuccess and type(equipped) == "table" then
+                targetEquipped = equipped
+            end
+
             if next(targetEmotes) then
                 for name, ids in pairs(targetEmotes) do
-                    pcall(function() desc:SetEmotes(name, ids) end)
+                    pcall(function()
+                        desc:SetEmotes(name, ids)
+                    end)
                 end
             end
+
             if next(targetEquipped) then
-                pcall(function() desc:SetEquippedEmotes(targetEquipped) end)
+                pcall(function()
+                    desc:SetEquippedEmotes(targetEquipped)
+                end)
             end
-            humanoid:ApplyDescription(desc)
+
+            humanoid:ApplyDescriptionClientServer(desc)
+
             task.wait(0.15)
-            if avatarConfig.Misc and avatarConfig.Misc.Headless then
+
+            if cfg["Misc"] and cfg["Misc"]["Headless"] then
                 local head = character:FindFirstChild("Head")
                 if head then
                     head.Transparency = 1
                     local face = head:FindFirstChild("face")
-                    if face then face.Transparency = 1 end
+                    if face then
+                        face.Transparency = 1
+                    end
                 end
             end
-            if avatarConfig.Misc and avatarConfig.Misc.Korblox then
+
+            if cfg["Misc"] and cfg["Misc"]["Korblox"] then
                 local rightLowerLeg = character:FindFirstChild("RightLowerLeg")
                 local rightUpperLeg = character:FindFirstChild("RightUpperLeg")
                 local rightFoot = character:FindFirstChild("RightFoot")
+
                 if rightLowerLeg then
-                    pcall(function() rightLowerLeg.MeshId = "902942093" end)
+                    rightLowerLeg.MeshId = "902942093"
                     rightLowerLeg.Transparency = 1
                 end
+
                 if rightUpperLeg then
-                    pcall(function() rightUpperLeg.MeshId = "http://www.roblox.com/asset/?id=902942096" end)
+                    rightUpperLeg.MeshId = "http://www.roblox.com/asset/?id=902942096"
                     rightUpperLeg.TextureID = "http://roblox.com/asset/?id=902843398"
+                    rightUpperLeg.Size = rightUpperLeg.Size * Vector3.new(1.2, 1, 1.2)
                 end
+
                 if rightFoot then
-                    pcall(function() rightFoot.MeshId = "902942089" end)
+                    rightFoot.MeshId = "902942089"
                     rightFoot.Transparency = 1
                 end
             end
+
             ForceStand(humanoid)
             ReloadAnimate(character)
+
             initialApplyDone = true
-        end)
+        end)()
     end
-    getgenv().ApplyAvatarChanger = function()
-        local avatarConfig = shared.xvory and shared.xvory["Player Modifications"] and shared.xvory["Player Modifications"]["Avatar Changer"]
-        if not avatarConfig or not avatarConfig.Enabled or not avatarConfig.Username or avatarConfig.Username == "" then return end
-        if lastAppliedUsername ~= avatarConfig.Username then
-            hasApplied = false
-            initialApplyDone = false
-            ChangeAvatar()
-        end
-    end
+
     local function HookCharacter(character)
+        hasApplied = false
+        initialApplyDone = false
         task.wait(0.1)
-        if not hasApplied then
-            ChangeAvatar()
-        end
+        ChangeAvatar()
     end
+
     if getgenv().AvatarChangerConnection then
         getgenv().AvatarChangerConnection:Disconnect()
     end
+
     getgenv().AvatarChangerConnection = LocalPlayer.CharacterAdded:Connect(HookCharacter)
+
+    getgenv().ApplyAvatarChanger = function()
+        local avatarConfig = shared.xvory and shared.xvory["Player Modifications"] and shared.xvory["Player Modifications"]["Avatar Changer"]
+        if not avatarConfig or not avatarConfig.Enabled or not avatarConfig.Username or avatarConfig.Username == "" then return end
+        
+        hasApplied = false
+        ChangeAvatar()
+    end
+
     if LocalPlayer.Character then
         ChangeAvatar()
     end

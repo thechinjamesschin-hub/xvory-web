@@ -235,7 +235,7 @@ app.post('/api/login', async (req, res) => {
                 id: user.id,
                 username: user.username,
                 role: user.role,
-                license: user.license,
+                license: "HIDDEN",
                 pfp: user.pfp,
                 registeredAt: user.registeredAt,
                 lastLogin: user.lastLogin,
@@ -264,7 +264,7 @@ app.post('/api/settings', (req, res) => {
             id: user.id,
             username: user.username,
             role: user.role,
-            license: user.license,
+            license: "HIDDEN",
             pfp: user.pfp,
             lastUsernameChange: user.lastUsernameChange,
             registeredAt: user.registeredAt,
@@ -302,7 +302,7 @@ app.post('/api/change-username', (req, res) => {
     user.username = newUsername.trim();
     user.lastUsernameChange = new Date().toISOString();
     saveData();
-    res.json({ success: true, message: "Username updated!", user: { username: user.username, role: user.role, license: user.license, pfp: user.pfp, lastUsernameChange: user.lastUsernameChange } });
+    res.json({ success: true, message: "Username updated!", user: { username: user.username, role: user.role, license: "HIDDEN", pfp: user.pfp, lastUsernameChange: user.lastUsernameChange } });
 });
 
 app.post('/api/change-password', (req, res) => {
