@@ -67,21 +67,8 @@ app.get('/app.js', (req, res) => {
     res.status(404).send('Not found');
 });
 
-app.get('/style.css', (req, res, next) => {
-    const referer = req.headers.referer || '';
-    if (!referer) {
-        return res.status(403).send('Forbidden');
-    }
-    next();
-});
 
-app.get('/xvory-theme.css', (req, res, next) => {
-    const referer = req.headers.referer || '';
-    if (!referer) {
-        return res.status(403).send('Forbidden');
-    }
-    next();
-});
+
 
 app.use(express.static(path.join(__dirname, 'public'), {
     setHeaders: (res, filePath) => {
