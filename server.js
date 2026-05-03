@@ -16,7 +16,7 @@ const DATA_FILE = path.join(DATA_DIR, 'data.json');
 if (!fs.existsSync(DATA_DIR)) {
     try {
         fs.mkdirSync(DATA_DIR, { recursive: true });
-    } catch(e) {
+    } catch (e) {
         console.error("Could not create data directory", e);
     }
 }
