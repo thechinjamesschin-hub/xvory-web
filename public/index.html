@@ -30,7 +30,7 @@
                 <span class="brand-text">XVORY</span>
             </div>
             <div class="nav-center" id="nav-discord-center">
-                <a href="https://discord.gg/xvorycc" target="_blank" class="nav-discord-btn" id="discord-login-link">Join Our Discord</a>
+                <a href="https://discord.gg/xvorycc" target="_blank" class="nav-discord-btn discord-link">Join Our Discord</a>
             </div>
             <div class="nav-right">
                 <button class="nav-link" onclick="document.getElementById('hero-section').scrollIntoView({behavior: 'smooth'})">Login</button>
@@ -46,6 +46,17 @@
                     <p class="hero-subtitle">ADVANCED LUA MANAGEMENT</p>
                 </div>
                 <div class="login-wrapper">
+                    <!-- HIDDEN ELEMENTS TO PREVENT JS CRASH -->
+                    <div class="login-glow" style="display: none;"></div>
+                    <div class="login-brand" style="display: none;">
+                        <div class="brand-icon"></div>
+                        <h1>XVORY</h1>
+                        <p class="brand-tagline">CLOUD-BASED LUA MANAGEMENT</p>
+                    </div>
+                    <div class="login-footer" style="display: none;">
+                        <a href="#" class="discord-link" id="discord-login-link">Join Our Discord</a>
+                    </div>
+                    <!-- END HIDDEN ELEMENTS -->
                     <div class="login-box transparent-box">
                         <div class="login-tabs"
                             style="display: flex; border-bottom: 1px solid rgba(255,255,255,0.1); margin-bottom: 20px;">
@@ -146,7 +157,7 @@
         <section class="preview-section" id="preview-section">
             <h2 class="preview-title">PREVIEW</h2>
             <div class="video-container">
-                <div class="video-wrapper transparent-box">
+                <div class="video-wrapper transparent-box" style="max-width: 800px; margin: 0 auto;">
                     <video autoplay loop muted playsinline src="videos/365_title.mov"></video>
                 </div>
             </div>
