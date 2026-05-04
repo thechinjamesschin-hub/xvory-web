@@ -241,13 +241,15 @@ function verifyTurnstileToken(token) {
 
 app.post('/api/register', async (req, res) => {
     const { username, password, license, cfToken } = req.body;
-    if (!username || !password || !license || !cfToken) {
-        return res.status(400).json({ success: false, message: "Username, password, license, and verification are required" });
+    if (!username || !password || !license) {
+        return res.status(400).json({ success: false, message: "Username, password, and license are required" });
     }
 
-    const isHuman = await verifyTurnstileToken(cfToken);
-    if (!isHuman) {
-        return res.status(403).json({ success: false, message: "Cloudflare verification failed" });
+    if (cfToken) {
+        const isHuman = await verifyTurnstileToken(cfToken);
+        if (!isHuman) {
+            return res.status(403).json({ success: false, message: "Cloudflare verification failed" });
+        }
     }
 
     if (!VALID_KEYS.includes(license)) {

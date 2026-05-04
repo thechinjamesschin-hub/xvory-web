@@ -47,7 +47,7 @@ local function Start()
 
     table.insert(conns, RunService.Heartbeat:Connect(function()
         if not Config.Enabled then
-            frozenCF = nil
+            frozenCF = nil  
             return
         end
 

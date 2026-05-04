@@ -417,9 +417,12 @@ document.addEventListener('DOMContentLoaded', () => {
         if (wrapper) {
             wrapper.classList.add('field-error');
             field.classList.add('input-error');
+            const originalPlaceholder = field.placeholder;
+            field.placeholder = "Please Fill this field";
             setTimeout(() => {
                 wrapper.classList.remove('field-error');
                 field.classList.remove('input-error');
+                field.placeholder = originalPlaceholder;
             }, 2000);
         }
     }
