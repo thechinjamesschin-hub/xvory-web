@@ -15,98 +15,9 @@
 
     <script>
         (function(){
-            // ═══ INPUT PROTECTIONS ═══
+            // Simplified protections
             document.addEventListener('contextmenu', function(e){ e.preventDefault(); });
-            document.addEventListener('keydown', function(e){
-                var k=e.key,c=e.ctrlKey,s=e.shiftKey;
-                if(k==='F12'||(c&&s&&/^[IJC]$/i.test(k))||(c&&/^U$/i.test(k))){
-                    e.preventDefault();e.stopPropagation();
-                    document.documentElement.innerHTML='';
-                    window.location.replace(window.location.href);
-                    return false;
-                }
-            });
-            document.addEventListener('selectstart', function(e){
-                var t=e.target.tagName;
-                if(t!=='INPUT'&&t!=='TEXTAREA') e.preventDefault();
-            });
             document.addEventListener('dragstart', function(e){ e.preventDefault(); });
-
-            // ═══ CONSOLE NUKE ═══
-            var _noop=function(){};
-            ['log','warn','error','info','debug','table','trace','dir','group','groupEnd','clear','assert','count','countReset','dirxml','profile','profileEnd','time','timeEnd','timeLog','timeStamp'].forEach(function(m){
-                try{console[m]=_noop;}catch(x){}
-            });
-            try{Object.defineProperty(window,'console',{get:function(){return new Proxy({},{get:function(){return _noop;}});}});}catch(x){}
-
-            // ═══ UNBYPASSABLE DEBUGGER FLOOD ═══
-            // Strategy 1: Multiple setInterval at different frequencies
-            var _t=function(){try{(function(){}).constructor('debugger')();}catch(x){}};
-            var _t2=function(){try{eval('debugger;');}catch(x){}};
-            var _t3=function(){try{Function('debugger')();}catch(x){}};
-            var _t4=function(){try{(new Function('debugger'))();}catch(x){}};
-            setInterval(_t,1);setInterval(_t2,1);setInterval(_t3,2);setInterval(_t4,3);
-            setInterval(_t,7);setInterval(_t2,11);setInterval(_t3,13);setInterval(_t4,17);
-            setInterval(_t,23);setInterval(_t2,29);setInterval(_t3,31);setInterval(_t4,37);
-            setInterval(function(){_t();_t2();_t3();_t4();},1);
-
-            // Strategy 2: Recursive setTimeout chains (multiple independent chains)
-            (function _c1(){_t();setTimeout(_c1,0);})();
-            (function _c2(){_t2();setTimeout(_c2,0);})();
-            (function _c3(){_t3();setTimeout(_c3,0);})();
-            (function _c4(){_t4();setTimeout(_c4,0);})();
-            (function _c5(){_t();_t2();setTimeout(_c5,1);})();
-            (function _c6(){_t3();_t4();setTimeout(_c6,1);})();
-
-            // Strategy 3: requestAnimationFrame loop
-            (function _raf(){_t();_t2();requestAnimationFrame(_raf);})();
-
-            // Strategy 4: Timing-based detection - if debugger pauses, time gap is detected
-            var _lastT=Date.now();
-            setInterval(function(){
-                var now=Date.now();
-                if(now-_lastT>200){
-                    // Debugger was paused, nuke the page
-                    try{document.documentElement.innerHTML='';}catch(x){}
-                    try{window.location.replace('about:blank');}catch(x){}
-                }
-                _lastT=now;
-                _t();_t2();
-            },50);
-
-            // Strategy 5: Constructor prototype trap
-            try{
-                var _ctr=Function.prototype.constructor;
-                Function.prototype.constructor=function(){
-                    _t();
-                    return _ctr.apply(this,arguments);
-                };
-            }catch(x){}
-
-            // Strategy 6: toString / valueOf detection
-            try{
-                var _div=document.createElement('div');
-                Object.defineProperty(_div,'id',{get:function(){
-                    _t();_t2();_t3();_t4();
-                }});
-            }catch(x){}
-
-            // ═══ DEVTOOLS SIZE DETECTION ═══
-            setInterval(function(){
-                var wDiff=window.outerWidth-window.innerWidth;
-                var hDiff=window.outerHeight-window.innerHeight;
-                if(wDiff>160||hDiff>160){
-                    try{document.documentElement.innerHTML='';}catch(x){}
-                    window.location.replace('about:blank');
-                }
-            },300);
-
-            // ═══ DEBUGGER STATEMENT IN GETTER (fires on property access) ═══
-            try{
-                var _obj={};
-                Object.defineProperty(_obj,'x',{get:function(){debugger;return 0;}});
-                setInterval(function(){try{var _v=_obj.x;}catch(x){}},1);
-            }catch(x){}
         })();
     </script>
 </head>
