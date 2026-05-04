@@ -84,6 +84,7 @@ app.get('/xvory-theme.css', (req, res) => {
 
 
 app.use(express.static(path.join(__dirname, 'public'), {
+    index: false,
     setHeaders: (res, filePath) => {
         if (filePath.endsWith('.js')) {
             res.setHeader('Content-Type', 'application/javascript; charset=utf-8');
@@ -177,6 +178,7 @@ app.get('/', (req, res) => {
             res.setHeader('Cache-Control', 'no-store');
             res.send(html);
         } catch (e) {
+            console.error('Error serving index:', e);
             res.sendFile(indexPath);
         }
     } else {
