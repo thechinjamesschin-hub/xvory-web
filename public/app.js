@@ -12,11 +12,7 @@ const SecureStore = {
 window.turnstileLoginId = null;
 window.turnstileRegisterId = null;
 
-window.onloadTurnstileCallback = function () {
-    const sitekey = '0x4AAAAAADHAYXGvq5g1uUe4';
-    window.turnstileLoginId = turnstile.render('#cf-login', { sitekey: sitekey, theme: 'dark' });
-    window.turnstileRegisterId = turnstile.render('#cf-register', { sitekey: sitekey, theme: 'dark' });
-};
+
 
 document.addEventListener('DOMContentLoaded', () => {
 
@@ -398,7 +394,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 t.style.color = '#888';
             });
             tab.classList.add('active');
-            tab.style.borderBottomColor = '#ff3a3a';
+            tab.style.borderBottomColor = '#ffffff';
             tab.style.color = 'white';
 
             document.getElementById('form-login').style.display = 'none';
@@ -419,16 +415,8 @@ document.addEventListener('DOMContentLoaded', () => {
         const username = loginUsername.value.trim();
         const password = loginPassword.value.trim();
 
-        const turnstileElement = document.querySelector('#form-login [name="cf-turnstile-response"]');
-        const cfToken = turnstileElement ? turnstileElement.value : '';
-
         if (!username || !password) {
             loginError.textContent = "Please enter username and password";
-            return;
-        }
-
-        if (!cfToken) {
-            loginError.textContent = "Please complete the Cloudflare verification";
             return;
         }
 
@@ -438,7 +426,7 @@ document.addEventListener('DOMContentLoaded', () => {
         fetch('/api/login', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ username, password, cfToken })
+            body: JSON.stringify({ username, password })
         })
             .then(res => res.json())
             .then(data => {
@@ -485,14 +473,12 @@ document.addEventListener('DOMContentLoaded', () => {
                     loginError.textContent = data.message;
                     loginBtn.disabled = false;
                     loginBtn.querySelector('span').textContent = 'Login';
-                    if (window.turnstile && window.turnstileLoginId !== null) window.turnstile.reset(window.turnstileLoginId);
                 }
             })
             .catch(err => {
                 loginError.textContent = "Server connection failed";
                 loginBtn.disabled = false;
                 loginBtn.querySelector('span').textContent = 'Login';
-                if (window.turnstile && window.turnstileLoginId !== null) window.turnstile.reset(window.turnstileLoginId);
             });
     }
 
@@ -548,16 +534,8 @@ document.addEventListener('DOMContentLoaded', () => {
         const password = regPassword.value.trim();
         const license = regLicense.value.trim();
 
-        const turnstileElement = document.querySelector('#form-register [name="cf-turnstile-response"]');
-        const cfToken = turnstileElement ? turnstileElement.value : '';
-
         if (!username || !password || !license) {
             registerError.textContent = "Please fill all fields";
-            return;
-        }
-
-        if (!cfToken) {
-            registerError.textContent = "Please complete the Cloudflare verification";
             return;
         }
 
@@ -567,7 +545,7 @@ document.addEventListener('DOMContentLoaded', () => {
         fetch('/api/register', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ username, password, license, cfToken })
+            body: JSON.stringify({ username, password, license })
         })
             .then(res => res.json())
             .then(data => {
@@ -582,14 +560,12 @@ document.addEventListener('DOMContentLoaded', () => {
                     registerError.textContent = data.message;
                     registerBtn.disabled = false;
                     registerBtn.querySelector('span').textContent = 'Register';
-                    if (window.turnstile && window.turnstileRegisterId !== null) window.turnstile.reset(window.turnstileRegisterId);
                 }
             })
             .catch(err => {
                 registerError.textContent = "Server connection failed";
                 registerBtn.disabled = false;
                 registerBtn.querySelector('span').textContent = 'Register';
-                if (window.turnstile && window.turnstileRegisterId !== null) window.turnstile.reset(window.turnstileRegisterId);
             });
     }
 
@@ -712,13 +688,13 @@ document.addEventListener('DOMContentLoaded', () => {
             item.style.margin = '5px 0';
             item.style.borderRadius = '12px';
             item.style.cursor = 'pointer';
-            item.style.background = isSelected ? 'rgba(46, 204, 113, 0.15)' : 'rgba(255, 255, 255, 0.03)';
-            item.style.border = isSelected ? '1px solid #2ecc71' : '1px solid transparent';
+            item.style.background = isSelected ? 'rgba(255, 255, 255, 0.15)' : 'rgba(255, 255, 255, 0.03)';
+            item.style.border = isSelected ? '1px solid #ffffff' : '1px solid transparent';
 
             item.innerHTML = `
                 <div style="display:flex; justify-content:space-between; align-items:center;">
-                    <span style="font-weight:600; color:${isSelected ? '#2ecc71' : '#fff'};">${config.name}</span>
-                    ${config.id === activeConfigId ? '<span style="font-size:10px; color:#2ecc71;">[ACTIVE]</span>' : ''}
+                    <span style="font-weight:600; color:#fff;">${config.name}</span>
+                    ${config.id === activeConfigId ? '<span style="font-size:10px; color:#fff;">[ACTIVE]</span>' : ''}
                 </div>
             `;
 

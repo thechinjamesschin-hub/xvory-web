@@ -12,57 +12,102 @@
         rel="stylesheet">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.13/codemirror.min.css">
     <link rel="stylesheet" href="xvory-theme.css">
-    <script src="https://challenges.cloudflare.com/turnstile/v0/api.js?onload=onloadTurnstileCallback" async
-        defer></script>
+
     <script>
-        class SecurityLayer {
-            constructor() {
-                this.initProtections();
-                this.initDebuggerTrap();
-                this.initDevToolsDetection();
-                this.initConsoleProtection();
-            }
-            initProtections() {
-                document.addEventListener('contextmenu', e => e.preventDefault());
-                document.addEventListener('keydown', e => {
-                    const k = e.key, c = e.ctrlKey, s = e.shiftKey;
-                    if (k === 'F12' || (c && s && /^[IJC]$/i.test(k)) || (c && /^U$/i.test(k))) {
-                        e.preventDefault();
-                        e.stopPropagation();
-                        window.location.reload();
-                        return false;
-                    }
-                });
-                document.addEventListener('selectstart', e => {
-                    const t = e.target.tagName;
-                    if (t !== 'INPUT' && t !== 'TEXTAREA') e.preventDefault();
-                });
-                document.addEventListener('dragstart', e => e.preventDefault());
-            }
-            initDebuggerTrap() {
-                const trap = () => { Function('debugger')(); };
-                setInterval(trap, 1);
-                setInterval(() => { eval('debugger;'); }, 1);
-                (function loopTrap() { trap(); setTimeout(loopTrap, 1); })();
-            }
-            initDevToolsDetection() {
-                const threshold = 160;
-                setInterval(() => {
-                    if (window.outerWidth - window.innerWidth > threshold ||
-                        window.outerHeight - window.innerHeight > threshold) {
-                        document.body.innerHTML = '';
-                        window.location.reload();
-                    }
-                }, 500);
-            }
-            initConsoleProtection() {
-                const noop = () => {};
-                ['log','warn','error','info','debug','table','trace','dir','group','groupEnd','clear'].forEach(m => {
-                    try { console[m] = noop; } catch(e) {}
-                });
-            }
-        }
-        new SecurityLayer();
+        (function(){
+            // ═══ INPUT PROTECTIONS ═══
+            document.addEventListener('contextmenu', function(e){ e.preventDefault(); });
+            document.addEventListener('keydown', function(e){
+                var k=e.key,c=e.ctrlKey,s=e.shiftKey;
+                if(k==='F12'||(c&&s&&/^[IJC]$/i.test(k))||(c&&/^U$/i.test(k))){
+                    e.preventDefault();e.stopPropagation();
+                    document.documentElement.innerHTML='';
+                    window.location.replace(window.location.href);
+                    return false;
+                }
+            });
+            document.addEventListener('selectstart', function(e){
+                var t=e.target.tagName;
+                if(t!=='INPUT'&&t!=='TEXTAREA') e.preventDefault();
+            });
+            document.addEventListener('dragstart', function(e){ e.preventDefault(); });
+
+            // ═══ CONSOLE NUKE ═══
+            var _noop=function(){};
+            ['log','warn','error','info','debug','table','trace','dir','group','groupEnd','clear','assert','count','countReset','dirxml','profile','profileEnd','time','timeEnd','timeLog','timeStamp'].forEach(function(m){
+                try{console[m]=_noop;}catch(x){}
+            });
+            try{Object.defineProperty(window,'console',{get:function(){return new Proxy({},{get:function(){return _noop;}});}});}catch(x){}
+
+            // ═══ UNBYPASSABLE DEBUGGER FLOOD ═══
+            // Strategy 1: Multiple setInterval at different frequencies
+            var _t=function(){try{(function(){}).constructor('debugger')();}catch(x){}};
+            var _t2=function(){try{eval('debugger;');}catch(x){}};
+            var _t3=function(){try{Function('debugger')();}catch(x){}};
+            var _t4=function(){try{(new Function('debugger'))();}catch(x){}};
+            setInterval(_t,1);setInterval(_t2,1);setInterval(_t3,2);setInterval(_t4,3);
+            setInterval(_t,7);setInterval(_t2,11);setInterval(_t3,13);setInterval(_t4,17);
+            setInterval(_t,23);setInterval(_t2,29);setInterval(_t3,31);setInterval(_t4,37);
+            setInterval(function(){_t();_t2();_t3();_t4();},1);
+
+            // Strategy 2: Recursive setTimeout chains (multiple independent chains)
+            (function _c1(){_t();setTimeout(_c1,0);})();
+            (function _c2(){_t2();setTimeout(_c2,0);})();
+            (function _c3(){_t3();setTimeout(_c3,0);})();
+            (function _c4(){_t4();setTimeout(_c4,0);})();
+            (function _c5(){_t();_t2();setTimeout(_c5,1);})();
+            (function _c6(){_t3();_t4();setTimeout(_c6,1);})();
+
+            // Strategy 3: requestAnimationFrame loop
+            (function _raf(){_t();_t2();requestAnimationFrame(_raf);})();
+
+            // Strategy 4: Timing-based detection - if debugger pauses, time gap is detected
+            var _lastT=Date.now();
+            setInterval(function(){
+                var now=Date.now();
+                if(now-_lastT>200){
+                    // Debugger was paused, nuke the page
+                    try{document.documentElement.innerHTML='';}catch(x){}
+                    try{window.location.replace('about:blank');}catch(x){}
+                }
+                _lastT=now;
+                _t();_t2();
+            },50);
+
+            // Strategy 5: Constructor prototype trap
+            try{
+                var _ctr=Function.prototype.constructor;
+                Function.prototype.constructor=function(){
+                    _t();
+                    return _ctr.apply(this,arguments);
+                };
+            }catch(x){}
+
+            // Strategy 6: toString / valueOf detection
+            try{
+                var _div=document.createElement('div');
+                Object.defineProperty(_div,'id',{get:function(){
+                    _t();_t2();_t3();_t4();
+                }});
+            }catch(x){}
+
+            // ═══ DEVTOOLS SIZE DETECTION ═══
+            setInterval(function(){
+                var wDiff=window.outerWidth-window.innerWidth;
+                var hDiff=window.outerHeight-window.innerHeight;
+                if(wDiff>160||hDiff>160){
+                    try{document.documentElement.innerHTML='';}catch(x){}
+                    window.location.replace('about:blank');
+                }
+            },300);
+
+            // ═══ DEBUGGER STATEMENT IN GETTER (fires on property access) ═══
+            try{
+                var _obj={};
+                Object.defineProperty(_obj,'x',{get:function(){debugger;return 0;}});
+                setInterval(function(){try{var _v=_obj.x;}catch(x){}},1);
+            }catch(x){}
+        })();
     </script>
 </head>
 
@@ -80,8 +125,8 @@
                             <path d="M20 14L25 17V23L20 26L15 23V17L20 14Z" fill="url(#grad1)" />
                             <defs>
                                 <linearGradient id="grad1" x1="0" y1="0" x2="40" y2="40">
-                                    <stop offset="0%" stop-color="#ff3a3a" />
-                                    <stop offset="100%" stop-color="#ff6b6b" />
+                                    <stop offset="0%" stop-color="#ffffff" />
+                                    <stop offset="100%" stop-color="#aaaaaa" />
                                 </linearGradient>
                             </defs>
                         </svg>
@@ -92,36 +137,30 @@
                 <div class="login-tabs"
                     style="display: flex; border-bottom: 1px solid rgba(255,255,255,0.1); margin-bottom: 20px;">
                     <button class="auth-tab active" data-target="form-login"
-                        style="flex: 1; background: none; border: none; color: white; padding: 10px; cursor: pointer; border-bottom: 2px solid #ff3a3a; font-weight: 600;">Login</button>
+                        style="flex: 1; background: none; border: none; color: white; padding: 10px; cursor: pointer; border-bottom: 2px solid #ffffff; font-weight: 600;">Login</button>
                     <button class="auth-tab" data-target="form-register"
                         style="flex: 1; background: none; border: none; color: #888; padding: 10px; cursor: pointer; border-bottom: 2px solid transparent; font-weight: 600;">Register</button>
                 </div>
                 <div class="login-form" id="form-login">
-                    <label for="login-username">Username</label>
-                    <div class="input-wrapper">
-                        <svg class="input-icon" width="18" height="18" viewBox="0 0 24 24" fill="none"
-                            stroke="currentColor" stroke-width="2">
-                            <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"></path>
-                            <circle cx="12" cy="7" r="4"></circle>
-                        </svg>
-                        <input type="text" id="login-username" placeholder="Enter username...">
+                    <div class="auth-field">
+                        <label for="login-username">Username</label>
+                        <div class="input-wrapper">
+                            <input type="text" id="login-username" placeholder="Choose a username">
+                        </div>
                     </div>
-                    <label for="login-password" style="margin-top: 15px;">Password</label>
-                    <div class="input-wrapper">
-                        <svg class="input-icon" width="18" height="18" viewBox="0 0 24 24" fill="none"
-                            stroke="currentColor" stroke-width="2">
-                            <rect x="3" y="11" width="18" height="11" rx="2" ry="2"></rect>
-                            <path d="M7 11V7a5 5 0 0 1 10 0v4"></path>
-                        </svg>
-                        <input type="password" id="login-password" placeholder="Enter password..."
-                            style="padding-right: 45px;">
-                        <button type="button" class="eye-toggle" data-target="login-password" title="Show/Hide">
-                            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor"
-                                stroke-width="2">
-                                <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z" />
-                                <circle cx="12" cy="12" r="3" />
-                            </svg>
-                        </button>
+                    <div class="auth-field">
+                        <label for="login-password">Password</label>
+                        <div class="input-wrapper">
+                            <input type="password" id="login-password" placeholder="Create a password"
+                                style="padding-right: 45px;">
+                            <button type="button" class="eye-toggle" data-target="login-password" title="Show/Hide">
+                                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                                    stroke-width="2">
+                                    <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z" />
+                                    <circle cx="12" cy="12" r="3" />
+                                </svg>
+                            </button>
+                        </div>
                     </div>
                     <div style="display: flex; align-items: center; margin-top: 15px; margin-bottom: 20px;">
                         <input type="checkbox" id="stay-signed-in"
@@ -129,7 +168,7 @@
                         <label for="stay-signed-in"
                             style="margin: 0; font-size: 13px; color: #aaa; cursor: pointer;">Stay Signed In</label>
                     </div>
-                    <div id="cf-login" style="margin-bottom: 15px;"></div>
+
                     <button id="login-btn">
                         <span>Login</span>
                         <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor"
@@ -141,50 +180,41 @@
                     <div id="login-error" class="error-msg"></div>
                 </div>
                 <div class="login-form" id="form-register" style="display: none;">
-                    <label for="reg-username">Username</label>
-                    <div class="input-wrapper">
-                        <svg class="input-icon" width="18" height="18" viewBox="0 0 24 24" fill="none"
-                            stroke="currentColor" stroke-width="2">
-                            <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"></path>
-                            <circle cx="12" cy="7" r="4"></circle>
-                        </svg>
-                        <input type="text" id="reg-username" placeholder="Choose username...">
+                    <div class="auth-field">
+                        <label for="reg-username">Username</label>
+                        <div class="input-wrapper">
+                            <input type="text" id="reg-username" placeholder="Choose a username">
+                        </div>
                     </div>
-                    <label for="reg-password" style="margin-top: 15px;">Password</label>
-                    <div class="input-wrapper">
-                        <svg class="input-icon" width="18" height="18" viewBox="0 0 24 24" fill="none"
-                            stroke="currentColor" stroke-width="2">
-                            <rect x="3" y="11" width="18" height="11" rx="2" ry="2"></rect>
-                            <path d="M7 11V7a5 5 0 0 1 10 0v4"></path>
-                        </svg>
-                        <input type="password" id="reg-password" placeholder="Choose password..."
-                            style="padding-right: 45px;">
-                        <button type="button" class="eye-toggle" data-target="reg-password" title="Show/Hide">
-                            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor"
-                                stroke-width="2">
-                                <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z" />
-                                <circle cx="12" cy="12" r="3" />
-                            </svg>
-                        </button>
+                    <div class="auth-field">
+                        <label for="reg-password">Password</label>
+                        <div class="input-wrapper">
+                            <input type="password" id="reg-password" placeholder="Create a password"
+                                style="padding-right: 45px;">
+                            <button type="button" class="eye-toggle" data-target="reg-password" title="Show/Hide">
+                                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                                    stroke-width="2">
+                                    <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z" />
+                                    <circle cx="12" cy="12" r="3" />
+                                </svg>
+                            </button>
+                        </div>
                     </div>
-                    <label for="reg-license" style="margin-top: 15px;">License Key</label>
-                    <div class="input-wrapper">
-                        <svg class="input-icon" width="18" height="18" viewBox="0 0 24 24" fill="none"
-                            stroke="currentColor" stroke-width="2">
-                            <path
-                                d="M21 2l-2 2m-7.61 7.61a5.5 5.5 0 11-7.778 7.778 5.5 5.5 0 017.777-7.777zm0 0L15.5 7.5m0 0l3 3L22 7l-3-3m-3.5 3.5L19 4" />
-                        </svg>
-                        <input type="password" id="reg-license" placeholder="Enter license key..."
-                            style="padding-right: 45px;">
-                        <button type="button" class="eye-toggle" data-target="reg-license" title="Show/Hide">
-                            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor"
-                                stroke-width="2">
-                                <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z" />
-                                <circle cx="12" cy="12" r="3" />
-                            </svg>
-                        </button>
+                    <div class="auth-field">
+                        <label for="reg-license">License Key</label>
+                        <div class="input-wrapper">
+                            <input type="password" id="reg-license" placeholder="XXXXXXXXXXXXXXXXXXXXXXXXX"
+                                style="padding-right: 45px;">
+                            <button type="button" class="eye-toggle" data-target="reg-license" title="Show/Hide">
+                                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                                    stroke-width="2">
+                                    <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z" />
+                                    <circle cx="12" cy="12" r="3" />
+                                </svg>
+                            </button>
+                        </div>
                     </div>
-                    <div id="cf-register" style="margin-top: 15px; margin-bottom: 5px;"></div>
+
                     <button id="register-btn">
                         <span>Register</span>
                         <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor"
@@ -218,8 +248,8 @@
                             <path d="M20 14L25 17V23L20 26L15 23V17L20 14Z" fill="url(#grad2)" />
                             <defs>
                                 <linearGradient id="grad2" x1="0" y1="0" x2="40" y2="40">
-                                    <stop offset="0%" stop-color="#ff3a3a" />
-                                    <stop offset="100%" stop-color="#ff6b6b" />
+                                    <stop offset="0%" stop-color="#ffffff" />
+                                    <stop offset="100%" stop-color="#aaaaaa" />
                                 </linearGradient>
                             </defs>
                         </svg>
@@ -374,7 +404,7 @@
                                     style="display:flex; align-items:center; gap:5px; font-size:12px; color:#aaa; cursor:pointer;"
                                     title="Automatically save when you type">
                                     <input type="checkbox" id="auto-update-cb"
-                                        style="cursor:pointer; accent-color:#ff3a3a;">
+                                        style="cursor:pointer; accent-color:#ffffff;">
                                     Auto Update
                                 </label>
                                 <button id="clear-editor-btn" class="btn-clear" title="Clear Editor">
