@@ -411,14 +411,40 @@ document.addEventListener('DOMContentLoaded', () => {
         });
     });
 
+    function shakeField(field) {
+        if (!field) return;
+        const wrapper = field.closest('.auth-field') || field.parentElement;
+        if (wrapper) {
+            wrapper.classList.add('field-error');
+            field.classList.add('input-error');
+            setTimeout(() => {
+                wrapper.classList.remove('field-error');
+                field.classList.remove('input-error');
+            }, 2000);
+        }
+    }
+
+    function validateFields(fields) {
+        let valid = true;
+        fields.forEach(f => {
+            if (f && !f.value.trim()) {
+                shakeField(f);
+                valid = false;
+            }
+        });
+        return valid;
+    }
+
     function doLogin() {
         const username = loginUsername.value.trim();
         const password = loginPassword.value.trim();
 
-        if (!username || !password) {
-            loginError.textContent = "Please enter username and password";
+        if (!validateFields([loginUsername, loginPassword])) {
+            loginError.textContent = "Please fill in all fields";
             return;
         }
+
+        const cfToken = window.cfLoginToken || null;
 
         loginBtn.disabled = true;
         loginBtn.querySelector('span').textContent = 'Logging in...';
@@ -426,7 +452,7 @@ document.addEventListener('DOMContentLoaded', () => {
         fetch('/api/login', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ username, password })
+            body: JSON.stringify({ username, password, cfToken })
         })
             .then(res => res.json())
             .then(data => {
@@ -442,8 +468,6 @@ document.addEventListener('DOMContentLoaded', () => {
                         profileImg.src = pfpSrc;
                         if (settingsPfpPreview) settingsPfpPreview.src = pfpSrc;
                     }
-
-
 
                     const tierBadge = document.getElementById('tier-badge');
                     if (tierBadge) {
@@ -473,12 +497,20 @@ document.addEventListener('DOMContentLoaded', () => {
                     loginError.textContent = data.message;
                     loginBtn.disabled = false;
                     loginBtn.querySelector('span').textContent = 'Login';
+                    if (window.turnstile && window.turnstileLoginId !== null) {
+                        window.turnstile.reset(window.turnstileLoginId);
+                    }
+                    window.cfLoginToken = null;
                 }
             })
             .catch(err => {
                 loginError.textContent = "Server connection failed";
                 loginBtn.disabled = false;
                 loginBtn.querySelector('span').textContent = 'Login';
+                if (window.turnstile && window.turnstileLoginId !== null) {
+                    window.turnstile.reset(window.turnstileLoginId);
+                }
+                window.cfLoginToken = null;
             });
     }
 
@@ -534,10 +566,12 @@ document.addEventListener('DOMContentLoaded', () => {
         const password = regPassword.value.trim();
         const license = regLicense.value.trim();
 
-        if (!username || !password || !license) {
-            registerError.textContent = "Please fill all fields";
+        if (!validateFields([regUsername, regPassword, regLicense])) {
+            registerError.textContent = "Please fill in all fields";
             return;
         }
+
+        const cfToken = window.cfRegisterToken || null;
 
         registerBtn.disabled = true;
         registerBtn.querySelector('span').textContent = 'Registering...';
@@ -545,7 +579,7 @@ document.addEventListener('DOMContentLoaded', () => {
         fetch('/api/register', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ username, password, license })
+            body: JSON.stringify({ username, password, license, cfToken })
         })
             .then(res => res.json())
             .then(data => {
@@ -560,12 +594,20 @@ document.addEventListener('DOMContentLoaded', () => {
                     registerError.textContent = data.message;
                     registerBtn.disabled = false;
                     registerBtn.querySelector('span').textContent = 'Register';
+                    if (window.turnstile && window.turnstileRegisterId !== null) {
+                        window.turnstile.reset(window.turnstileRegisterId);
+                    }
+                    window.cfRegisterToken = null;
                 }
             })
             .catch(err => {
                 registerError.textContent = "Server connection failed";
                 registerBtn.disabled = false;
                 registerBtn.querySelector('span').textContent = 'Register';
+                if (window.turnstile && window.turnstileRegisterId !== null) {
+                    window.turnstile.reset(window.turnstileRegisterId);
+                }
+                window.cfRegisterToken = null;
             });
     }
 

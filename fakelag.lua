@@ -1,102 +1,138 @@
--- Xvory Stand Still Desync (Network Freeze)
+-- Xvory Stand-Still Desync
+-- Others see you STUCK at one spot. You walk freely on your screen.
+-- Server never gets your real position.
+
 local RunService = game:GetService("RunService")
 local Players = game:GetService("Players")
+local UserInputService = game:GetService("UserInputService")
 local LocalPlayer = Players.LocalPlayer
 
-local DesyncConfig = {
-    Enabled = true -- Simple toggle as requested
+local Config = {
+    Enabled = true,
+    ToggleKey = Enum.KeyCode.K
 }
 
--- If connected to shared dashboard state
 if shared.xvory and shared.xvory["Desync"] then
-    DesyncConfig.Enabled = shared.xvory["Desync"].Enabled
+    local c = shared.xvory["Desync"]
+    if c.Enabled ~= nil then Config.Enabled = c.Enabled end
 end
 
-local realCFrame = nil
-local frozenCFrame = nil
-local connections = {}
+if getgenv().XvoryFakeLag then
+    pcall(function() getgenv().XvoryFakeLag.Unload() end)
+end
+
+local conns = {}
+local frozenCF = nil
+local realCF = nil
 
 local function Cleanup()
-    for _, conn in ipairs(connections) do
-        if conn.Connected then conn:Disconnect() end
+    for _, c in ipairs(conns) do
+        if c.Connected then c:Disconnect() end
     end
-    table.clear(connections)
-    realCFrame = nil
-    frozenCFrame = nil
+    table.clear(conns)
+    frozenCF = nil
+    realCF = nil
 end
 
--- Ensure old instances are cleaned up if re-executed
-if getgenv().XvoryDesync then
-    pcall(function() getgenv().XvoryDesync.Unload() end)
+local function GetHRP()
+    local ch = LocalPlayer.Character
+    return ch and ch:FindFirstChild("HumanoidRootPart")
 end
 
-local function GetRoot()
-    if LocalPlayer.Character then
-        return LocalPlayer.Character:FindFirstChild("HumanoidRootPart")
-    end
-    return nil
+local function GetHum()
+    local ch = LocalPlayer.Character
+    return ch and ch:FindFirstChildOfClass("Humanoid")
 end
 
-local function InitDesync()
+local function Start()
     Cleanup()
-    
-    -- 1. On Stepped (Runs BEFORE physics simulation)
-    -- We switch our position to the frozen position so the server physics engine sees us there.
-    table.insert(connections, RunService.Stepped:Connect(function()
-        if not DesyncConfig.Enabled then 
-            frozenCFrame = nil
-            return 
+
+    -- Stepped = BEFORE physics (server reads position here)
+    -- We put character at frozen spot so server thinks we're there
+    table.insert(conns, RunService.Stepped:Connect(function()
+        if not Config.Enabled then
+            frozenCF = nil
+            realCF = nil
+            return
         end
-        
-        local hrp = GetRoot()
-        local hum = LocalPlayer.Character and LocalPlayer.Character:FindFirstChild("Humanoid")
-        
-        if hrp and hum and hum.Health > 0 then
-            -- Save where we actually are locally
-            realCFrame = hrp.CFrame
-            
-            -- If we haven't frozen a position yet, freeze where we are right now
-            if not frozenCFrame then
-                frozenCFrame = hrp.CFrame
+
+        local hrp = GetHRP()
+        local hum = GetHum()
+        if not hrp or not hum or hum.Health <= 0 then
+            frozenCF = nil
+            realCF = nil
+            return
+        end
+
+        -- Save where we really are right now
+        realCF = hrp.CFrame
+
+        -- Lock the frozen position once
+        if not frozenCF then
+            frozenCF = hrp.CFrame
+        end
+
+        -- Move to frozen spot for the physics/network step
+        hrp.CFrame = frozenCF
+        hrp.AssemblyLinearVelocity = Vector3.zero
+        hrp.AssemblyAngularVelocity = Vector3.zero
+    end))
+
+    -- Heartbeat = AFTER physics (client renders here)
+    -- We restore our real position so we see smooth movement
+    table.insert(conns, RunService.Heartbeat:Connect(function()
+        if not Config.Enabled or not realCF then return end
+
+        local hrp = GetHRP()
+        local hum = GetHum()
+        if not hrp or not hum or hum.Health <= 0 then return end
+
+        -- Figure out how much the humanoid tried to move us
+        -- During physics, character moved FROM frozenCF by some delta
+        -- We apply that same delta to our real position
+        if frozenCF then
+            local movedCF = hrp.CFrame
+            local delta = frozenCF:ToObjectSpace(movedCF)
+            realCF = realCF * delta
+        end
+
+        -- Snap to real position
+        hrp.CFrame = realCF
+    end))
+
+    -- On respawn, reset frozen position
+    table.insert(conns, LocalPlayer.CharacterAdded:Connect(function()
+        frozenCF = nil
+        realCF = nil
+    end))
+
+    -- Toggle key
+    if Config.ToggleKey then
+        table.insert(conns, UserInputService.InputBegan:Connect(function(input, gpe)
+            if gpe then return end
+            if input.KeyCode == Config.ToggleKey then
+                Config.Enabled = not Config.Enabled
+                if not Config.Enabled then
+                    frozenCF = nil
+                    realCF = nil
+                end
+                print("[Xvory] Desync " .. (Config.Enabled and "ON" or "OFF"))
             end
-            
-            -- Temporarily move to the frozen position for the physics step
-            hrp.CFrame = frozenCFrame
-        end
-    end))
-    
-    -- 2. On Heartbeat (Runs AFTER physics simulation)
-    -- We switch back to our real position so our local camera and rendering is perfectly smooth.
-    table.insert(connections, RunService.Heartbeat:Connect(function()
-        if not DesyncConfig.Enabled then return end
-        
-        local hrp = GetRoot()
-        local hum = LocalPlayer.Character and LocalPlayer.Character:FindFirstChild("Humanoid")
-        
-        if hrp and realCFrame and hum and hum.Health > 0 then
-            -- Restore our local movement so we don't feel any lag
-            hrp.CFrame = realCFrame
-            
-            -- Optional: Apply extreme velocity to break server prediction/extrapolation
-            -- hrp.AssemblyLinearVelocity = Vector3.new(1e5, 1e5, 1e5) 
-        end
-    end))
-    
-    table.insert(connections, LocalPlayer.CharacterAdded:Connect(function()
-        frozenCFrame = nil
-    end))
+        end))
+    end
 end
 
--- Expose global control
-getgenv().XvoryDesync = {
+getgenv().XvoryFakeLag = {
+    Config = Config,
     Toggle = function(state)
-        DesyncConfig.Enabled = state
+        Config.Enabled = state
         if not state then
-            frozenCFrame = nil
+            frozenCF = nil
+            realCF = nil
         end
     end,
     Unload = Cleanup
 }
 
-InitDesync()
-print("[Xvory] Stand-Still Desync Module Loaded!")
+Start()
+print("[Xvory] Stand-Still Desync Loaded | Press K to toggle")
