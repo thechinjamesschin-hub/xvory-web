@@ -1,6 +1,6 @@
 -- Xvory Stand-Still Desync
--- Others see you STUCK at one spot. You walk freely on your screen.
--- Server never gets your real position.
+-- Server sees you STUCK at one spot. You walk smoothly on your screen.
+-- Uses Heartbeat + RenderStepped technique to fool network replication while keeping local physics intact.
 
 local RunService = game:GetService("RunService")
 local Players = game:GetService("Players")
@@ -23,7 +23,6 @@ end
 
 local conns = {}
 local frozenCF = nil
-local realCF = nil
 
 local function Cleanup()
     for _, c in ipairs(conns) do
@@ -31,7 +30,6 @@ local function Cleanup()
     end
     table.clear(conns)
     frozenCF = nil
-    realCF = nil
 end
 
 local function GetHRP()
@@ -47,12 +45,10 @@ end
 local function Start()
     Cleanup()
 
-    -- Stepped = BEFORE physics (server reads position here)
-    -- We put character at frozen spot so server thinks we're there
-    table.insert(conns, RunService.Stepped:Connect(function()
+    -- Heartbeat runs AFTER physics, right when network replication happens.
+    table.insert(conns, RunService.Heartbeat:Connect(function()
         if not Config.Enabled then
             frozenCF = nil
-            realCF = nil
             return
         end
 
@@ -60,50 +56,30 @@ local function Start()
         local hum = GetHum()
         if not hrp or not hum or hum.Health <= 0 then
             frozenCF = nil
-            realCF = nil
             return
         end
 
-        -- Save where we really are right now
-        realCF = hrp.CFrame
-
-        -- Lock the frozen position once
+        -- Initialize the frozen spot
         if not frozenCF then
             frozenCF = hrp.CFrame
         end
 
-        -- Move to frozen spot for the physics/network step
+        -- Save our REAL position that physics just calculated
+        local realCF = hrp.CFrame
+
+        -- Teleport to the frozen spot for the network step
         hrp.CFrame = frozenCF
-        hrp.AssemblyLinearVelocity = Vector3.zero
-        hrp.AssemblyAngularVelocity = Vector3.zero
-    end))
+        
+        -- Yield the thread until RenderStepped (which runs before the frame is drawn on your screen)
+        RunService.RenderStepped:Wait()
 
-    -- Heartbeat = AFTER physics (client renders here)
-    -- We restore our real position so we see smooth movement
-    table.insert(conns, RunService.Heartbeat:Connect(function()
-        if not Config.Enabled or not realCF then return end
-
-        local hrp = GetHRP()
-        local hum = GetHum()
-        if not hrp or not hum or hum.Health <= 0 then return end
-
-        -- Figure out how much the humanoid tried to move us
-        -- During physics, character moved FROM frozenCF by some delta
-        -- We apply that same delta to our real position
-        if frozenCF then
-            local movedCF = hrp.CFrame
-            local delta = frozenCF:ToObjectSpace(movedCF)
-            realCF = realCF * delta
-        end
-
-        -- Snap to real position
+        -- Restore our real position so our camera and character render smoothly
         hrp.CFrame = realCF
     end))
 
-    -- On respawn, reset frozen position
+    -- Reset on respawn
     table.insert(conns, LocalPlayer.CharacterAdded:Connect(function()
         frozenCF = nil
-        realCF = nil
     end))
 
     -- Toggle key
@@ -114,7 +90,6 @@ local function Start()
                 Config.Enabled = not Config.Enabled
                 if not Config.Enabled then
                     frozenCF = nil
-                    realCF = nil
                 end
                 print("[Xvory] Desync " .. (Config.Enabled and "ON" or "OFF"))
             end
@@ -128,7 +103,6 @@ getgenv().XvoryFakeLag = {
         Config.Enabled = state
         if not state then
             frozenCF = nil
-            realCF = nil
         end
     end,
     Unload = Cleanup
