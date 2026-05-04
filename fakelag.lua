@@ -1,6 +1,6 @@
--- Xvory True Network Desync
--- Flawless implementation: No camera stutter, no yielding, full smooth movement.
--- Freezes your server-side position and velocity so you take no damage where you walk.
+-- Xvory Ultimate Velocity Desync (No Body Detachment)
+-- Uses NaN/Infinity velocity replication breaking instead of CFrame teleporting.
+-- This guarantees your visual body stays perfectly with you, and your camera never bugs out.
 
 local RunService = game:GetService("RunService")
 local Players = game:GetService("Players")
@@ -22,8 +22,6 @@ if getgenv().XvoryFakeLag then
 end
 
 local conns = {}
-local frozenCF = nil
-local realCF = nil
 local realVel = nil
 local realRotVel = nil
 local hrp = nil
@@ -34,62 +32,46 @@ local function Cleanup()
     end
     table.clear(conns)
     
-    pcall(function()
-        RunService:UnbindFromRenderStep("XvoryDesyncRestore")
-    end)
-
-    if hrp and realCF then
-        hrp.CFrame = realCF
+    if hrp and realVel then
+        hrp.AssemblyLinearVelocity = realVel
+        hrp.AssemblyAngularVelocity = realRotVel
     end
-
-    frozenCF = nil
     hrp = nil
 end
 
 local function Start()
     Cleanup()
 
-    -- 1. Heartbeat fires AFTER physics, right before Network Replication.
-    -- We trick the server by sending the frozen CFrame and zero velocity.
+    -- 1. Heartbeat: Right before the client sends its position to the server.
+    -- We set our velocity to Infinity. The Roblox server's anti-sanity checks
+    -- will completely reject our network packets, freezing our server-side hitbox
+    -- at the exact spot we enabled it.
     table.insert(conns, RunService.Heartbeat:Connect(function()
-        if not Config.Enabled then 
-            frozenCF = nil 
-            return 
-        end
+        if not Config.Enabled then return end
         
         local char = LocalPlayer.Character
         hrp = char and char:FindFirstChild("HumanoidRootPart")
         if not hrp then return end
 
-        if not frozenCF then 
-            frozenCF = hrp.CFrame 
-        end
-
-        -- Save our actual local physics state
-        realCF = hrp.CFrame
+        -- Save our actual local physics velocity
         realVel = hrp.AssemblyLinearVelocity
         realRotVel = hrp.AssemblyAngularVelocity
 
-        -- Trick the server
-        hrp.CFrame = frozenCF
-        hrp.AssemblyLinearVelocity = Vector3.zero
-        hrp.AssemblyAngularVelocity = Vector3.zero
+        -- Send astronomical velocity to break server replication
+        hrp.AssemblyLinearVelocity = Vector3.new(9e9, 9e9, 9e9)
+        hrp.AssemblyAngularVelocity = Vector3.new(9e9, 9e9, 9e9)
     end))
 
-    -- 2. Bind to RenderStep BEFORE the Camera updates.
-    -- This restores our real position so our local screen and camera stay 100% smooth.
-    -- Because we don't use Wait(), the game threads never stutter!
-    RunService:BindToRenderStep("XvoryDesyncRestore", Enum.RenderPriority.Camera.Value - 10, function()
-        if Config.Enabled and hrp and realCF then
-            hrp.CFrame = realCF
+    -- 2. Stepped: Right before local physics are simulated.
+    -- We restore our real velocity so our local character walks perfectly normally.
+    -- Because we NEVER touch CFrame, your visual body will NEVER detach from you!
+    table.insert(conns, RunService.Stepped:Connect(function()
+        if not Config.Enabled then return end
+        
+        if hrp and realVel then
             hrp.AssemblyLinearVelocity = realVel
             hrp.AssemblyAngularVelocity = realRotVel
         end
-    end)
-
-    -- Reset on respawn
-    table.insert(conns, LocalPlayer.CharacterAdded:Connect(function()
-        frozenCF = nil
     end))
 
     -- Toggle key
@@ -99,10 +81,12 @@ local function Start()
             if input.KeyCode == Config.ToggleKey then
                 Config.Enabled = not Config.Enabled
                 if not Config.Enabled then
-                    if hrp and realCF then hrp.CFrame = realCF end
-                    frozenCF = nil
+                    if hrp and realVel then 
+                        hrp.AssemblyLinearVelocity = realVel 
+                        hrp.AssemblyAngularVelocity = realRotVel
+                    end
                 end
-                print("[Xvory] True Network Desync " .. (Config.Enabled and "ON" or "OFF"))
+                print("[Xvory] Velocity Desync " .. (Config.Enabled and "ON" or "OFF"))
             end
         end))
     end
@@ -113,12 +97,14 @@ getgenv().XvoryFakeLag = {
     Toggle = function(state)
         Config.Enabled = state
         if not state then
-            if hrp and realCF then hrp.CFrame = realCF end
-            frozenCF = nil
+            if hrp and realVel then 
+                hrp.AssemblyLinearVelocity = realVel 
+                hrp.AssemblyAngularVelocity = realRotVel
+            end
         end
     end,
     Unload = Cleanup
 }
 
 Start()
-print("[Xvory] True Network Desync Loaded | Press K to toggle")
+print("[Xvory] Velocity Desync Loaded | Press K to toggle")
