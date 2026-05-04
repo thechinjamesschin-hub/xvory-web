@@ -1,6 +1,6 @@
--- Xvory Stand-Still Desync
--- Server sees you STUCK at one spot. You walk smoothly on your screen.
--- Uses Heartbeat + RenderStepped technique to fool network replication while keeping local physics intact.
+-- Xvory Velocity Desync
+-- Server sees you STUCK at one spot because we zero out velocity and lock CFrame.
+-- Client runs perfectly smooth and retains animations.
 
 local RunService = game:GetService("RunService")
 local Players = game:GetService("Players")
@@ -45,7 +45,6 @@ end
 local function Start()
     Cleanup()
 
-    -- Heartbeat runs AFTER physics, right when network replication happens.
     table.insert(conns, RunService.Heartbeat:Connect(function()
         if not Config.Enabled then
             frozenCF = nil
@@ -59,22 +58,28 @@ local function Start()
             return
         end
 
-        -- Initialize the frozen spot
         if not frozenCF then
             frozenCF = hrp.CFrame
         end
 
-        -- Save our REAL position that physics just calculated
+        -- Save real physics state
         local realCF = hrp.CFrame
+        local realVel = hrp.AssemblyLinearVelocity
+        local realRotVel = hrp.AssemblyAngularVelocity
 
-        -- Teleport to the frozen spot for the network step
+        -- Lock to frozen position AND zero out velocity for the network step
+        -- If velocity isn't zero, the server will try to predict where you are walking!
         hrp.CFrame = frozenCF
+        hrp.AssemblyLinearVelocity = Vector3.new(0, 0, 0)
+        hrp.AssemblyAngularVelocity = Vector3.new(0, 0, 0)
         
-        -- Yield the thread until RenderStepped (which runs before the frame is drawn on your screen)
+        -- Yield until just before rendering
         RunService.RenderStepped:Wait()
 
-        -- Restore our real position so our camera and character render smoothly
+        -- Restore real physics state so you walk normally
         hrp.CFrame = realCF
+        hrp.AssemblyLinearVelocity = realVel
+        hrp.AssemblyAngularVelocity = realRotVel
     end))
 
     -- Reset on respawn
@@ -91,7 +96,7 @@ local function Start()
                 if not Config.Enabled then
                     frozenCF = nil
                 end
-                print("[Xvory] Desync " .. (Config.Enabled and "ON" or "OFF"))
+                print("[Xvory] Velocity Desync " .. (Config.Enabled and "ON" or "OFF"))
             end
         end))
     end
@@ -109,4 +114,4 @@ getgenv().XvoryFakeLag = {
 }
 
 Start()
-print("[Xvory] Stand-Still Desync Loaded | Press K to toggle")
+print("[Xvory] Velocity Desync Loaded | Press K to toggle")
