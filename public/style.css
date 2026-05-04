@@ -73,10 +73,10 @@ body {
     pointer-events: none;
     z-index: 9999;
     background:
-        radial-gradient(ellipse at top left, rgba(0,0,0,0.7) 0%, transparent 50%),
-        radial-gradient(ellipse at top right, rgba(0,0,0,0.7) 0%, transparent 50%),
-        radial-gradient(ellipse at bottom left, rgba(0,0,0,0.7) 0%, transparent 50%),
-        radial-gradient(ellipse at bottom right, rgba(0,0,0,0.7) 0%, transparent 50%);
+        radial-gradient(ellipse at top left, rgba(0, 0, 0, 0.7) 0%, transparent 50%),
+        radial-gradient(ellipse at top right, rgba(0, 0, 0, 0.7) 0%, transparent 50%),
+        radial-gradient(ellipse at bottom left, rgba(0, 0, 0, 0.7) 0%, transparent 50%),
+        radial-gradient(ellipse at bottom right, rgba(0, 0, 0, 0.7) 0%, transparent 50%);
 }
 
 .screen {
@@ -257,6 +257,7 @@ body {
         opacity: 0;
         transform: translateY(5px);
     }
+
     100% {
         opacity: 1;
         transform: translateY(0);
@@ -385,9 +386,22 @@ body {
 
 /* Field Validation */
 @keyframes shakeField {
-    0%, 100% { transform: translateX(0); }
-    10%, 50%, 90% { transform: translateX(-4px); }
-    30%, 70% { transform: translateX(4px); }
+
+    0%,
+    100% {
+        transform: translateX(0);
+    }
+
+    10%,
+    50%,
+    90% {
+        transform: translateX(-4px);
+    }
+
+    30%,
+    70% {
+        transform: translateX(4px);
+    }
 }
 
 .field-error {
