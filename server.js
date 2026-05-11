@@ -95,6 +95,9 @@ app.use(express.static(path.join(__dirname, 'public'), {
 let configs = [];
 let activeConfigId = null;
 let users = [];
+let chatMessages = [];
+let friendRequests = [];
+let friends = {};
 
 function loadData() {
     try {
@@ -104,6 +107,9 @@ function loadData() {
             configs = data.configs || [];
             activeConfigId = data.activeConfigId || null;
             users = data.users || [];
+            chatMessages = data.chatMessages || [];
+            friendRequests = data.friendRequests || [];
+            friends = data.friends || {};
             console.log(`Loaded ${configs.length} configs and ${users.length} users from disk. Active: ${activeConfigId || 'none'}`);
         }
     } catch (err) {
@@ -111,12 +117,15 @@ function loadData() {
         configs = [];
         activeConfigId = null;
         users = [];
+        chatMessages = [];
+        friendRequests = [];
+        friends = {};
     }
 }
 
 function saveData() {
     try {
-        const data = JSON.stringify({ configs, activeConfigId, users }, null, 2);
+        const data = JSON.stringify({ configs, activeConfigId, users, chatMessages, friendRequests, friends }, null, 2);
         fs.writeFileSync(DATA_FILE, data, 'utf8');
     } catch (err) {
         console.error('Error saving data:', err.message);
@@ -489,6 +498,98 @@ app.get('/api/active-config', (req, res) => {
     } else {
         res.status(404).send("-- No active configuration set by Xvory Dashboard");
     }
+});
+
+// --- Chat & Friends API ---
+
+app.get('/api/chat', (req, res) => {
+    res.json({ success: true, messages: chatMessages.slice(-50) });
+});
+
+app.post('/api/chat', (req, res) => {
+    const { username, token, content } = req.body;
+    if (!token || !sessions[token] || sessions[token] !== username) {
+        return res.status(401).json({ success: false, message: "Unauthorized" });
+    }
+    const message = {
+        id: Date.now().toString(),
+        author: username,
+        content: content.substring(0, 500),
+        timestamp: new Date().toISOString()
+    };
+    chatMessages.push(message);
+    if (chatMessages.length > 200) chatMessages.shift();
+    saveData();
+    res.json({ success: true, message });
+});
+
+app.get('/api/friends', (req, res) => {
+    const token = req.headers['authorization'];
+    if (!token || !sessions[token]) {
+        return res.status(401).json({ success: false, message: "Unauthorized" });
+    }
+    const username = sessions[token];
+    const userRequests = friendRequests.filter(r => r.to === username);
+    const userFriends = friends[username] || [];
+    res.json({ success: true, requests: userRequests, friends: userFriends });
+});
+
+app.post('/api/friends/request', (req, res) => {
+    const { username, token, target } = req.body;
+    if (!token || !sessions[token] || sessions[token] !== username) {
+        return res.status(401).json({ success: false, message: "Unauthorized" });
+    }
+    if (username === target) {
+        return res.status(400).json({ success: false, message: "Cannot add yourself" });
+    }
+    const targetUser = users.find(u => u.username.toLowerCase() === target.toLowerCase());
+    if (!targetUser) {
+        return res.status(404).json({ success: false, message: "User not found" });
+    }
+    const targetRealName = targetUser.username;
+    
+    if ((friends[username] && friends[username].includes(targetRealName)) || 
+        friendRequests.find(r => r.from === username && r.to === targetRealName)) {
+        return res.status(400).json({ success: false, message: "Already friends or request pending" });
+    }
+    
+    friendRequests.push({ id: Date.now().toString(), from: username, to: targetRealName, timestamp: new Date().toISOString() });
+    saveData();
+    res.json({ success: true, message: "Friend request sent!" });
+});
+
+app.post('/api/friends/accept', (req, res) => {
+    const { username, token, requestId } = req.body;
+    if (!token || !sessions[token] || sessions[token] !== username) {
+        return res.status(401).json({ success: false, message: "Unauthorized" });
+    }
+    const idx = friendRequests.findIndex(r => r.id === requestId && r.to === username);
+    if (idx === -1) return res.status(404).json({ success: false, message: "Request not found" });
+    
+    const reqData = friendRequests[idx];
+    friendRequests.splice(idx, 1);
+    
+    if (!friends[username]) friends[username] = [];
+    if (!friends[reqData.from]) friends[reqData.from] = [];
+    
+    if (!friends[username].includes(reqData.from)) friends[username].push(reqData.from);
+    if (!friends[reqData.from].includes(username)) friends[reqData.from].push(username);
+    
+    saveData();
+    res.json({ success: true });
+});
+
+app.post('/api/friends/decline', (req, res) => {
+    const { username, token, requestId } = req.body;
+    if (!token || !sessions[token] || sessions[token] !== username) {
+        return res.status(401).json({ success: false, message: "Unauthorized" });
+    }
+    const idx = friendRequests.findIndex(r => r.id === requestId && r.to === username);
+    if (idx !== -1) {
+        friendRequests.splice(idx, 1);
+        saveData();
+    }
+    res.json({ success: true });
 });
 
 app.listen(PORT, '0.0.0.0', () => {
