@@ -442,11 +442,6 @@ document.addEventListener('DOMContentLoaded', () => {
         const username = loginUsername.value.trim();
         const password = loginPassword.value.trim();
 
-        if (!validateFields([loginUsername, loginPassword])) {
-            loginError.textContent = "Please fill in all fields";
-            return;
-        }
-
         const cfToken = window.cfLoginToken || null;
 
         loginBtn.disabled = true;
@@ -569,11 +564,6 @@ document.addEventListener('DOMContentLoaded', () => {
         const password = regPassword.value.trim();
         const license = regLicense.value.trim();
 
-        if (!validateFields([regUsername, regPassword, regLicense])) {
-            registerError.textContent = "Please fill in all fields";
-            return;
-        }
-
         const cfToken = window.cfRegisterToken || null;
 
         registerBtn.disabled = true;
@@ -614,11 +604,15 @@ document.addEventListener('DOMContentLoaded', () => {
             });
     }
 
-    if (loginBtn) loginBtn.addEventListener('click', doLogin);
-    if (loginPassword) loginPassword.addEventListener('keydown', (e) => { if (e.key === 'Enter') doLogin(); });
+    const formLogin = document.getElementById('form-login');
+    if (formLogin) {
+        formLogin.addEventListener('submit', (e) => { e.preventDefault(); doLogin(); });
+    }
 
-    if (registerBtn) registerBtn.addEventListener('click', doRegister);
-    if (regLicense) regLicense.addEventListener('keydown', (e) => { if (e.key === 'Enter') doRegister(); });
+    const formRegister = document.getElementById('form-register');
+    if (formRegister) {
+        formRegister.addEventListener('submit', (e) => { e.preventDefault(); doRegister(); });
+    }
 
     tabs.forEach(tab => {
         tab.addEventListener('click', () => {
@@ -932,4 +926,154 @@ document.addEventListener('DOMContentLoaded', () => {
             }
         });
     });
+
+    // --- Clock ---
+    const currentTimeEl = document.getElementById('current-time');
+    if (currentTimeEl) {
+        setInterval(() => {
+            const now = new Date();
+            currentTimeEl.textContent = now.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' });
+        }, 1000);
+    }
+
+    // --- Chat & Friends ---
+    const globalChatForm = document.getElementById('global-chat-form');
+    const globalChatInput = document.getElementById('global-chat-input');
+    const globalChatMessages = document.getElementById('global-chat-messages');
+
+    const addFriendForm = document.getElementById('add-friend-form');
+    const addFriendInput = document.getElementById('add-friend-input');
+    const friendReqCount = document.getElementById('friend-req-count');
+    const friendRequestsList = document.getElementById('friend-requests-list');
+    const friendsList = document.getElementById('friends-list');
+
+    function fetchChat() {
+        fetch('/api/chat')
+            .then(r => r.json())
+            .then(data => {
+                if (data.success && globalChatMessages) {
+                    globalChatMessages.innerHTML = '';
+                    data.messages.forEach(msg => {
+                        const el = document.createElement('div');
+                        el.className = 'chat-message';
+                        el.innerHTML = `
+                            <div class="meta">
+                                <span class="author" title="Click to add friend">${msg.author}</span>
+                                <span class="time">${new Date(msg.timestamp).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}</span>
+                            </div>
+                            <div class="content"></div>
+                        `;
+                        el.querySelector('.content').textContent = msg.content;
+                        el.querySelector('.author').addEventListener('click', () => {
+                            if (addFriendInput) addFriendInput.value = msg.author;
+                            const friendsTab = document.getElementById('nav-friends');
+                            if (friendsTab) friendsTab.click();
+                        });
+                        globalChatMessages.appendChild(el);
+                    });
+                    globalChatMessages.scrollTop = globalChatMessages.scrollHeight;
+                }
+            });
+    }
+
+    if (globalChatForm) {
+        globalChatForm.addEventListener('submit', (e) => {
+            e.preventDefault();
+            const content = globalChatInput.value.trim();
+            if (!content) return;
+            const auth = SecureStore.get('xvory-session');
+            if (!auth) return showToast('You must be logged in', 'error');
+
+            globalChatInput.value = '';
+            fetch('/api/chat', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ username: auth.username, token: auth.token, content })
+            })
+            .then(() => fetchChat());
+        });
+    }
+
+    function fetchFriends() {
+        const auth = SecureStore.get('xvory-session');
+        if (!auth) return;
+        fetch('/api/friends', {
+            headers: { 'Authorization': auth.token }
+        })
+        .then(r => r.json())
+        .then(data => {
+            if (data.success) {
+                if (friendReqCount) {
+                    friendReqCount.textContent = data.requests.length;
+                    friendReqCount.style.display = data.requests.length > 0 ? 'inline-block' : 'none';
+                }
+                if (friendRequestsList) {
+                    if (data.requests.length === 0) {
+                        friendRequestsList.innerHTML = '<p style="color: #888; font-size: 13px;">No pending requests.</p>';
+                    } else {
+                        friendRequestsList.innerHTML = '';
+                        data.requests.forEach(req => {
+                            const el = document.createElement('div');
+                            el.className = 'friend-request-item';
+                            el.innerHTML = `
+                                <span><strong>${req.from}</strong> sent you a friend request</span>
+                                <div class="friend-actions">
+                                    <button class="btn-accept">Accept</button>
+                                    <button class="btn-decline">Decline</button>
+                                </div>
+                            `;
+                            el.querySelector('.btn-accept').onclick = () => respondFriend(req.id, 'accept');
+                            el.querySelector('.btn-decline').onclick = () => respondFriend(req.id, 'decline');
+                            friendRequestsList.appendChild(el);
+                        });
+                    }
+                }
+                if (friendsList) {
+                    if (data.friends.length === 0) {
+                        friendsList.innerHTML = '<p style="color: #888; font-size: 13px;">You have no friends yet.</p>';
+                    } else {
+                        friendsList.innerHTML = data.friends.map(f => `<div style="padding: 10px; background: rgba(255,255,255,0.05); margin-bottom: 5px; border-radius: 8px; font-weight: bold; color: #fff;">${f}</div>`).join('');
+                    }
+                }
+            }
+        });
+    }
+
+    function respondFriend(requestId, action) {
+        const auth = SecureStore.get('xvory-session');
+        if (!auth) return;
+        fetch('/api/friends/' + action, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ username: auth.username, token: auth.token, requestId })
+        })
+        .then(() => fetchFriends());
+    }
+
+    if (addFriendForm) {
+        addFriendForm.addEventListener('submit', (e) => {
+            e.preventDefault();
+            const target = addFriendInput.value.trim();
+            if (!target) return;
+            const auth = SecureStore.get('xvory-session');
+            if (!auth) return;
+            fetch('/api/friends/request', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ username: auth.username, token: auth.token, target })
+            })
+            .then(r => r.json())
+            .then(data => {
+                showToast(data.message, data.success ? 'success' : 'error');
+                if (data.success) addFriendInput.value = '';
+            });
+        });
+    }
+
+    setInterval(() => {
+        if (dashboardScreen.classList.contains('active')) {
+            fetchChat();
+            fetchFriends();
+        }
+    }, 3000);
 });
