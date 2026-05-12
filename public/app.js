@@ -1049,7 +1049,7 @@ document.addEventListener('DOMContentLoaded', () => {
         })
         .then(() => fetchFriends());
     }
-
+    
     if (addFriendForm) {
         addFriendForm.addEventListener('submit', (e) => {
             e.preventDefault();
