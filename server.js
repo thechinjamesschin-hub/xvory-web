@@ -547,12 +547,12 @@ app.post('/api/friends/request', (req, res) => {
         return res.status(404).json({ success: false, message: "User not found" });
     }
     const targetRealName = targetUser.username;
-    
-    if ((friends[username] && friends[username].includes(targetRealName)) || 
+
+    if ((friends[username] && friends[username].includes(targetRealName)) ||
         friendRequests.find(r => r.from === username && r.to === targetRealName)) {
         return res.status(400).json({ success: false, message: "Already friends or request pending" });
     }
-    
+
     friendRequests.push({ id: Date.now().toString(), from: username, to: targetRealName, timestamp: new Date().toISOString() });
     saveData();
     res.json({ success: true, message: "Friend request sent!" });
@@ -565,16 +565,16 @@ app.post('/api/friends/accept', (req, res) => {
     }
     const idx = friendRequests.findIndex(r => r.id === requestId && r.to === username);
     if (idx === -1) return res.status(404).json({ success: false, message: "Request not found" });
-    
+
     const reqData = friendRequests[idx];
     friendRequests.splice(idx, 1);
-    
+
     if (!friends[username]) friends[username] = [];
     if (!friends[reqData.from]) friends[reqData.from] = [];
-    
+
     if (!friends[username].includes(reqData.from)) friends[username].push(reqData.from);
     if (!friends[reqData.from].includes(username)) friends[reqData.from].push(username);
-    
+
     saveData();
     res.json({ success: true });
 });
