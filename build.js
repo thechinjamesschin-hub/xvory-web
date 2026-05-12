@@ -54,7 +54,7 @@ async function build() {
         disableConsoleOutput: true,
         identifierNamesGenerator: 'hexadecimal',
         log: false,
-        numbersToExpressions: true,
+        numbersToExpressions: true, 
         renameGlobals: true,
         selfDefending: true,
         simplify: true,
