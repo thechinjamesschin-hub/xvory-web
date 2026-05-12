@@ -414,6 +414,11 @@ body {
     box-shadow: 0 0 0 3px rgba(239, 68, 68, 0.15) !important;
 }
 
+.input-error::placeholder {
+    color: #ef4444 !important;
+    opacity: 1 !important;
+}
+
 .auth-field.field-error label {
     color: #ef4444 !important;
 }
