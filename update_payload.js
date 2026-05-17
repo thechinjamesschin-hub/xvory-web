@@ -1,0 +1,10 @@
+const fs = require('fs');
+const min = fs.readFileSync('public/app.min.js');
+const payload = Buffer.from(min).toString('base64');
+let html = fs.readFileSync('live_site_check.html', 'utf16le');
+html = html.replace(/var _0x = atob\("[^"]+"\)/, 'var _0x = atob("' + payload + '")');
+fs.writeFileSync('live_site_check.html', html, 'utf16le');
+let html2 = fs.readFileSync('live_site.html', 'utf16le');
+html2 = html2.replace(/var _0x = atob\("[^"]+"\)/, 'var _0x = atob("' + payload + '")');
+fs.writeFileSync('live_site.html', html2, 'utf16le');
+console.log('updated live_site_check.html and live_site.html');
