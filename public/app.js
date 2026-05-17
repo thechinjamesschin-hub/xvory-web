@@ -510,7 +510,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 loginBtn.disabled = false;
                 loginBtn.querySelector('span').textContent = 'Login';
                 if (window.turnstile && window.turnstileLoginId !== null) {
-                    try { window.turnstile.reset(window.turnstileLoginId); } catch(e){}
+                    try { window.turnstile.reset(window.turnstileLoginId); } catch (e) { }
                 }
                 window.cfLoginToken = null;
             });
@@ -603,7 +603,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 registerBtn.disabled = false;
                 registerBtn.querySelector('span').textContent = 'Register';
                 if (window.turnstile && window.turnstileRegisterId !== null) {
-                    try { window.turnstile.reset(window.turnstileRegisterId); } catch(e){}
+                    try { window.turnstile.reset(window.turnstileRegisterId); } catch (e) { }
                 }
                 window.cfRegisterToken = null;
             });
@@ -964,7 +964,7 @@ document.addEventListener('DOMContentLoaded', () => {
                         el.innerHTML = `
                             <div class="meta">
                                 <span class="author" title="Click to add friend">${msg.author}</span>
-                                <span class="time">${new Date(msg.timestamp).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}</span>
+                                <span class="time">${new Date(msg.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</span>
                             </div>
                             <div class="content"></div>
                         `;
@@ -995,7 +995,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ username: auth.username, token: auth.token, content })
             })
-            .then(() => fetchChat());
+                .then(() => fetchChat());
         });
     }
 
@@ -1005,43 +1005,43 @@ document.addEventListener('DOMContentLoaded', () => {
         fetch('/api/friends', {
             headers: { 'Authorization': auth.token }
         })
-        .then(r => r.json())
-        .then(data => {
-            if (data.success) {
-                if (friendReqCount) {
-                    friendReqCount.textContent = data.requests.length;
-                    friendReqCount.style.display = data.requests.length > 0 ? 'inline-block' : 'none';
-                }
-                if (friendRequestsList) {
-                    if (data.requests.length === 0) {
-                        friendRequestsList.innerHTML = '<p style="color: #888; font-size: 13px;">No pending requests.</p>';
-                    } else {
-                        friendRequestsList.innerHTML = '';
-                        data.requests.forEach(req => {
-                            const el = document.createElement('div');
-                            el.className = 'friend-request-item';
-                            el.innerHTML = `
+            .then(r => r.json())
+            .then(data => {
+                if (data.success) {
+                    if (friendReqCount) {
+                        friendReqCount.textContent = data.requests.length;
+                        friendReqCount.style.display = data.requests.length > 0 ? 'inline-block' : 'none';
+                    }
+                    if (friendRequestsList) {
+                        if (data.requests.length === 0) {
+                            friendRequestsList.innerHTML = '<p style="color: #888; font-size: 13px;">No pending requests.</p>';
+                        } else {
+                            friendRequestsList.innerHTML = '';
+                            data.requests.forEach(req => {
+                                const el = document.createElement('div');
+                                el.className = 'friend-request-item';
+                                el.innerHTML = `
                                 <span><strong>${req.from}</strong> sent you a friend request</span>
                                 <div class="friend-actions">
                                     <button class="btn-accept">Accept</button>
                                     <button class="btn-decline">Decline</button>
                                 </div>
                             `;
-                            el.querySelector('.btn-accept').onclick = () => respondFriend(req.id, 'accept');
-                            el.querySelector('.btn-decline').onclick = () => respondFriend(req.id, 'decline');
-                            friendRequestsList.appendChild(el);
-                        });
+                                el.querySelector('.btn-accept').onclick = () => respondFriend(req.id, 'accept');
+                                el.querySelector('.btn-decline').onclick = () => respondFriend(req.id, 'decline');
+                                friendRequestsList.appendChild(el);
+                            });
+                        }
+                    }
+                    if (friendsList) {
+                        if (data.friends.length === 0) {
+                            friendsList.innerHTML = '<p style="color: #888; font-size: 13px;">You have no friends yet.</p>';
+                        } else {
+                            friendsList.innerHTML = data.friends.map(f => `<div style="padding: 10px; background: rgba(255,255,255,0.05); margin-bottom: 5px; border-radius: 8px; font-weight: bold; color: #fff;">${f}</div>`).join('');
+                        }
                     }
                 }
-                if (friendsList) {
-                    if (data.friends.length === 0) {
-                        friendsList.innerHTML = '<p style="color: #888; font-size: 13px;">You have no friends yet.</p>';
-                    } else {
-                        friendsList.innerHTML = data.friends.map(f => `<div style="padding: 10px; background: rgba(255,255,255,0.05); margin-bottom: 5px; border-radius: 8px; font-weight: bold; color: #fff;">${f}</div>`).join('');
-                    }
-                }
-            }
-        });
+            });
     }
 
     function respondFriend(requestId, action) {
@@ -1052,9 +1052,9 @@ document.addEventListener('DOMContentLoaded', () => {
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ username: auth.username, token: auth.token, requestId })
         })
-        .then(() => fetchFriends());
+            .then(() => fetchFriends());
     }
-    
+
     if (addFriendForm) {
         addFriendForm.addEventListener('submit', (e) => {
             e.preventDefault();
@@ -1067,11 +1067,11 @@ document.addEventListener('DOMContentLoaded', () => {
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ username: auth.username, token: auth.token, target })
             })
-            .then(r => r.json())
-            .then(data => {
-                showToast(data.message, data.success ? 'success' : 'error');
-                if (data.success) addFriendInput.value = '';
-            });
+                .then(r => r.json())
+                .then(data => {
+                    showToast(data.message, data.success ? 'success' : 'error');
+                    if (data.success) addFriendInput.value = '';
+                });
         });
     }
 
