@@ -502,11 +502,15 @@ document.addEventListener('DOMContentLoaded', () => {
                 }
             })
             .catch(err => {
-                loginError.textContent = "Server connection failed";
+                console.error('Login error:', err);
+                if (loginError) {
+                    loginError.textContent = "Server connection failed";
+                    loginError.style.display = 'block';
+                }
                 loginBtn.disabled = false;
                 loginBtn.querySelector('span').textContent = 'Login';
                 if (window.turnstile && window.turnstileLoginId !== null) {
-                    window.turnstile.reset(window.turnstileLoginId);
+                    try { window.turnstile.reset(window.turnstileLoginId); } catch(e){}
                 }
                 window.cfLoginToken = null;
             });
@@ -594,11 +598,12 @@ document.addEventListener('DOMContentLoaded', () => {
                 }
             })
             .catch(err => {
-                registerError.textContent = "Server connection failed";
+                console.error('Registration error:', err);
+                if (registerError) registerError.textContent = "Server connection failed";
                 registerBtn.disabled = false;
                 registerBtn.querySelector('span').textContent = 'Register';
                 if (window.turnstile && window.turnstileRegisterId !== null) {
-                    window.turnstile.reset(window.turnstileRegisterId);
+                    try { window.turnstile.reset(window.turnstileRegisterId); } catch(e){}
                 }
                 window.cfRegisterToken = null;
             });

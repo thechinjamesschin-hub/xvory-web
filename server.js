@@ -6,6 +6,7 @@ const https = require('https');
 const querystring = require('querystring');
 
 const app = express();
+app.set('trust proxy', 1); // Trust reverse proxies (like Railway) for rate limiting
 const PORT = process.env.PORT || 3000;
 
 // Use /app/data if on Railway (persistent volume), otherwise use local data.json
@@ -249,8 +250,10 @@ function verifyTurnstileToken(token) {
 }
 
 app.post('/api/register', async (req, res) => {
+    console.log('[Register] Request received for:', req.body.username);
     const { username, password, license, cfToken } = req.body;
     if (!username || !password || !license) {
+        console.log('[Register] Missing fields');
         return res.status(400).json({ success: false, message: "Username, password, and license are required" });
     }
 
